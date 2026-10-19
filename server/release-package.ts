@@ -12,7 +12,7 @@ export const releaseManifestSchema = z
     formatVersion: z.literal(1),
     version,
     minimumVersion: version,
-    platform: z.enum(['win32', 'linux']),
+    platform: z.enum(['win32', 'linux', 'darwin']),
     architecture: z.enum(['x64', 'arm64']),
     mysqlSchema: z.literal(5),
     sqliteSchema: z.literal(1),

@@ -16,7 +16,10 @@ RUN npm ci && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/shared ./shared
+# The server's Markdown exporter imports pure helpers from src/lib.
+COPY --from=builder /app/src/lib ./src/lib
 COPY --from=builder /app/scripts ./scripts
+COPY LICENSE THIRD_PARTY_NOTICES.md DEPENDENCY_LICENSES.md DEPENDENCIES.json ./
 RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 EXPOSE 3001

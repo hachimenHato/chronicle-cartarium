@@ -31,8 +31,8 @@ const checksumResponse = await fetch(base + 'SHASUMS256.txt', {
 });
 if (!checksumResponse.ok) throw new Error('Missing upstream runtime checksums');
 const sums = await checksumResponse.text();
-const cache = path.join(output, 'runtime-cache');
-await mkdir(cache);
+const cache = path.join(root, '.runtime/publishing/runtime-downloads');
+await mkdir(cache, { recursive: true });
 const assets = [];
 const targets = (
   process.env.PUBLIC_TARGETS || 'win-x64,linux-x64,linux-arm64,darwin-x64,darwin-arm64'
@@ -50,7 +50,9 @@ for (const target of targets) {
     throw new Error('Missing official runtime hash');
   console.log(`Preparing ${target}: official ${nodeVersion} runtime`);
   const archivePath = path.join(cache, archive);
-  const bytes = await download(base + archive, archivePath);
+  let bytes;
+  try { bytes = await readFile(archivePath); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; bytes = await download(base + archive, archivePath); }
   if (createHash('sha256').update(bytes).digest('hex') !== expected)
     throw new Error('Runtime checksum mismatch');
   const name = `chronicle-cartarium-${version}-${target}`;
@@ -60,7 +62,7 @@ for (const target of targets) {
     filter: (filename) =>
       !['node_modules', '.git', '.runtime', '.worldloom', 'data'].includes(path.basename(filename)),
   });
-  const extraction = path.join(cache, target);
+  const extraction = path.join(output, 'extract-' + target);
   await mkdir(extraction);
   if (windows) {
     if (process.platform !== 'win32')
@@ -73,7 +75,9 @@ for (const target of targets) {
     );
     if (child.status !== 0) throw new Error('Runtime ZIP extraction failed');
   } else {
-    await x({ cwd: extraction, file: archivePath, strict: true });
+    // npm/npx/Corepack command symlinks are unnecessary: launch.mjs invokes npm-cli.js directly.
+    // Skipping links also permits cross-packaging on Windows without symlink privileges.
+    await x({ cwd: extraction, file: archivePath, strict: true, filter: (_, entry) => !['SymbolicLink', 'Link'].includes(entry.type) });
   }
   const runtime = path.join(directory, 'runtime');
   await rename(path.join(extraction, runtimeName), runtime);
@@ -86,7 +90,7 @@ for (const target of targets) {
     await chmod(path.join(directory, launcher), 0o755);
   await writeFile(
     path.join(directory, 'RELEASE.txt'),
-    `Chronicle Cartarium ${version}\nTarget: ${target}\nRuntime: ${nodeVersion}; upstream SHA256 verified.\nNew installation archive; not an application update package.\nFirst launch downloads locked npm dependencies.\nWindows: start.cmd; Linux/macOS: sh start.sh. Open http://localhost:3001/\nNo credentials, user data or private signing keys included.\nCross-platform packaging does not imply native acceptance; see GitHub Release notes.\nmacOS signed in-app updates are not supported in this beta.\n`,
+    `Chronicle Cartarium ${version}\nTarget: ${target}\nRuntime: ${nodeVersion}; upstream SHA256 verified.\nNew installation archive; not an application update package.\nFirst launch downloads locked npm dependencies.\nWindows: start.cmd; Linux/macOS: sh start.sh. Open http://localhost:3001/\nNo credentials, user data or private signing keys included.\nCross-platform packaging does not imply native acceptance; see GitHub Release notes.\nmacOS update/recovery has not received native end-to-end acceptance in this release.\n`,
   );
   const inventory = [];
   async function walk(dir) {
@@ -139,7 +143,8 @@ for (const target of targets) {
         gzip: true,
         portable: true,
         onWriteEntry: (entry) => {
-          if (/\/(runtime\/node|start\.(sh|command))$/.test(entry.path)) entry.mode = 0o755;
+            if (/\/(runtime\/node|start\.(sh|command))$/.test(entry.path) && entry.stat)
+              entry.stat.mode = (entry.stat.mode & ~0o777) | 0o755;
         },
       },
       [name],
