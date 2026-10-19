@@ -1,0 +1,176 @@
+.division-panel {
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.division-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #654e39;
+  font-family: Georgia, serif;
+  font-size: 18px;
+}
+.division-heading small {
+  font: 11px sans-serif;
+  color: #958674;
+}
+.division-kind-tabs,
+.division-tools {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.division-panel > .division-kind-tabs {
+  flex-wrap: nowrap;
+}
+.division-panel > .division-kind-tabs button {
+  min-width: 0;
+}
+.atlas-canvas.division-tool-paint,
+.atlas-canvas.division-tool-erase,
+.atlas-canvas.division-tool-lasso {
+  cursor: crosshair;
+}
+.atlas-canvas.division-tool-vertices {
+  cursor: default;
+}
+.division-kind-tabs button,
+.division-tools button {
+  flex: 1;
+  min-width: 65px;
+  border: 1px solid #d8ccba;
+  background: #f7f0e3;
+  color: #675944;
+  border-radius: 6px;
+  padding: 8px 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.division-kind-tabs .active,
+.division-tools .active {
+  background: #76604a;
+  border-color: #76604a;
+  color: #fff9ea;
+}
+.division-tools button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.division-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 210px;
+  overflow: auto;
+}
+.division-list button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #f5efe4;
+  padding: 10px;
+  text-align: left;
+  color: #655744;
+}
+.division-list button.active {
+  border-color: #ad9573;
+  background: #eee2ca;
+}
+.division-list i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.division-list small {
+  margin-left: auto;
+  color: #8d8072;
+}
+.division-style-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  gap: 6px;
+}
+.division-style-row input[type='color'] {
+  width: 36px;
+  height: 26px;
+  border: 0;
+  background: none;
+  vertical-align: middle;
+}
+.division-precision {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid #d8ccba;
+  padding-top: 12px;
+}
+.map-size-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.map-size-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.map-dimensions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 0;
+  border-block: 1px solid #e4d8c4;
+}
+.map-division-label {
+  cursor: pointer;
+}
+.division-delete {
+  background: #f1e1d6;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  color: #784e3b;
+}
+.atlas-inspector .studio-inspector-tabs button {
+  min-width: 0;
+  padding-inline: 5px;
+}
+.map-size-grid label {
+  min-width: 0;
+}
+.map-size-grid .field {
+  width: 100%;
+  min-width: 0;
+}
+.atlas-create-modal {
+  max-height: calc(100dvh - 50px);
+  overflow: auto;
+}
+.division-quick-form,
+.division-quick-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.division-quick-form {
+  gap: 16px;
+}
+.division-snap {
+  border: 1px solid #ddcfb7;
+  background: #f5eee0;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.division-snap .atlas-subtle {
+  margin: 0;
+}

@@ -1,0 +1,388 @@
+.globe-extent-field {
+  margin: 16px 0;
+}
+.globe-extent-trigger {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+  gap: 12px;
+}
+.globe-extent-trigger span {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.globe-extent-trigger small {
+  color: var(--muted);
+  font-weight: 400;
+  line-height: 1.6;
+}
+.globe-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1800;
+  background: #101f29b8;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  backdrop-filter: blur(5px);
+}
+.globe-dialog {
+  width: min(860px, 100%);
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 26px;
+  border-radius: 18px;
+  box-shadow: 0 22px 90px #0005;
+}
+.globe-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.globe-dialog h2 {
+  font:
+    25px 'Noto Serif SC',
+    Georgia,
+    serif;
+  margin: 8px 0;
+}
+.globe-dialog p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.globe-dialog-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: center;
+}
+.globe-stage {
+  min-width: 0;
+  color: var(--muted);
+}
+.globe-viewport > svg {
+  display: block;
+  width: 100%;
+  touch-action: none;
+  cursor: grab;
+  outline-offset: -2px;
+}
+.globe-viewport > svg:active {
+  cursor: grabbing;
+}
+.globe-directions {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+.globe-controls {
+  min-width: 0;
+  display: grid;
+  gap: 15px;
+}
+.globe-controls label {
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+.globe-controls input {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--green);
+}
+.globe-controls small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.globe-controls output {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.8;
+  color: var(--green);
+}
+.globe-controls details {
+  font-size: 11px;
+  color: var(--muted);
+}
+.globe-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.globe-presets .btn {
+  padding: 8px 11px;
+  font-size: 12px;
+}
+.globe-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+@media (max-width: 600px) {
+  .globe-dialog {
+    padding: 18px;
+  }
+  .globe-dialog h2 {
+    font-size: 20px;
+  }
+  .globe-dialog-content {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .globe-stage {
+    max-width: 310px;
+    width: 100%;
+    margin: auto;
+  }
+}
+.globe-stage {
+  overflow: hidden;
+  border-radius: 14px;
+}
+.globe-viewport > svg {
+  aspect-ratio: 1;
+  height: auto;
+}
+.globe-zoom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+.globe-zoom output {
+  min-width: 66px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--ink);
+}
+.globe-viewport {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #244a5d;
+}
+.globe-local-caption {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: grid;
+  gap: 4px;
+  color: #fff0cd;
+  font-size: 11px;
+  text-shadow: 0 1px 4px #102f3c;
+  pointer-events: none;
+}
+.globe-local-caption span {
+  opacity: 0.85;
+}
+.globe-locator {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 76px;
+  border: 1px solid #d9dfc96b;
+  border-radius: 10px;
+  padding: 4px;
+  background: #203d4fdb;
+  pointer-events: none;
+}
+.globe-stage .globe-locator svg {
+  aspect-ratio: 1;
+  height: auto;
+  cursor: default;
+}
+.globe-locator small {
+  display: block;
+  color: #f5e6c5;
+  text-align: center;
+  font-size: 10px;
+  padding-bottom: 3px;
+}
+.globe-view-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+.globe-view-actions .btn {
+  padding: 7px 11px;
+  font-size: 12px;
+}
+.globe-view-actions > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.globe-view-actions > button svg {
+  flex: 0 0 auto;
+}
+.globe-climate {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  margin-top: 24px;
+  background: var(--surface, var(--paper));
+}
+.globe-climate-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.globe-climate-heading small {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 11px;
+}
+.globe-preview-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 0 10px;
+}
+.globe-preview-tabs button {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 7px 16px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.globe-preview-tabs button[aria-pressed='true'] {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--paper);
+}
+.globe-preview-key {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+.globe-climate dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 38px;
+  margin: 0 0 14px;
+}
+.globe-climate dt {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.globe-climate dd {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.globe-climate dd small {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.globe-biomes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 11px;
+}
+.globe-biomes span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.globe-biomes i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+.globe-climate p {
+  margin-bottom: 0;
+}
+@media (max-width: 600px) {
+  .globe-climate {
+    padding: 12px;
+  }
+}
+.globe-viewport > svg {
+  user-select: none;
+  outline: none;
+}
+.globe-viewport > svg:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+.globe-preview-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-areas: 'map stats' 'key biomes' 'notice notice';
+  gap: 8px 22px;
+  align-items: start;
+}
+.globe-preview-body > svg {
+  grid-area: map;
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e8e3d6;
+}
+.globe-preview-body > .globe-preview-key {
+  grid-area: key;
+  margin: 0;
+}
+.globe-preview-body > dl {
+  grid-area: stats;
+  display: grid;
+  gap: 16px;
+  margin: 4px 0 0;
+}
+.globe-preview-body > .globe-biomes {
+  grid-area: biomes;
+}
+.globe-preview-body > p {
+  grid-area: notice;
+}
+.globe-dialog > footer {
+  position: sticky;
+  bottom: -26px;
+  background: var(--paper);
+  padding: 14px 0;
+  z-index: 2;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 600px) {
+  .globe-preview-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .globe-preview-body > svg {
+    width: 100%;
+    height: auto;
+  }
+  .globe-preview-body > dl {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .globe-dialog > footer {
+    bottom: -18px;
+  }
+}

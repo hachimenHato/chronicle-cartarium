@@ -1,0 +1,184 @@
+.atlas-create-modal.atlas-geographic-create {
+  width: 620px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.atlas-geographic-create > p,
+.atlas-geographic-create .atlas-subtle {
+  color: var(--muted);
+}
+.map-creation-source {
+  color: var(--ink);
+  margin-bottom: 22px;
+}
+.map-source-options {
+  border: 0;
+  padding: 0;
+  margin: 0 0 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.map-source-options legend {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.map-source-option {
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 10px;
+  background: var(--surface, var(--paper));
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 10px;
+  cursor: pointer;
+}
+.map-source-option.active {
+  border-color: var(--accent, #52714d);
+  box-shadow: inset 0 0 0 1px var(--accent, #52714d);
+}
+.map-source-option input {
+  accent-color: var(--accent, #52714d);
+  margin: 4px 0 0;
+}
+.map-source-option > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.map-source-option strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+.map-source-option small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.map-creation-seed > span {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.map-creation-seed input {
+  flex: 1;
+  min-width: 0;
+}
+.map-creation-seed button {
+  flex-shrink: 0;
+}
+.map-creation-source .atlas-label {
+  margin-bottom: 10px;
+}
+.map-source-help,
+.map-color-palette > p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 8px 0 15px;
+}
+.map-color-import {
+  padding: 14px;
+  border: 1px dashed color-mix(in srgb, var(--ink) 24%, transparent);
+  border-radius: 10px;
+  background: var(--surface, var(--paper));
+}
+.map-color-import .atlas-label > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-color-import input[type='file'] {
+  width: 100%;
+  color: var(--ink);
+  font-size: 11px;
+  margin-top: 5px;
+}
+.map-color-progress,
+.map-color-error {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.map-color-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.map-color-error {
+  color: var(--danger, #b24939);
+}
+.map-color-result {
+  display: grid;
+  gap: 10px;
+  font-size: 11px;
+}
+.map-color-result > svg {
+  display: block;
+  width: 100%;
+  max-height: 210px;
+  border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
+  border-radius: 6px;
+}
+.map-color-result small {
+  color: var(--muted);
+}
+.map-color-result button {
+  justify-self: start;
+}
+.map-color-palette summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 0;
+}
+.map-color-palette > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.map-color-entry {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  background: var(--surface, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border-radius: 7px;
+}
+.map-color-chip {
+  width: 23px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid #283e3633;
+  border-radius: 4px;
+}
+.map-color-entry strong,
+.map-color-entry code,
+.map-color-entry small {
+  display: block;
+}
+.map-color-entry strong {
+  font-size: 11px;
+}
+.map-color-entry code {
+  font-size: 10px;
+  margin: 3px 0;
+}
+.map-color-entry small {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+@media (max-width: 600px) {
+  .atlas-create-modal.atlas-geographic-create {
+    padding: 20px;
+    max-height: calc(100dvh - 24px);
+  }
+  .map-source-options,
+  .map-color-palette > div {
+    grid-template-columns: 1fr;
+  }
+}

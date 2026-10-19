@@ -1,0 +1,1 @@
+ALTER TABLE atlas_map ADD COLUMN scale_km DOUBLE NULL;

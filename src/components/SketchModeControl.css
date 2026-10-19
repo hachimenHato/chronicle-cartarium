@@ -1,0 +1,79 @@
+.sketch-mode-control {
+  border: 1px solid color-mix(in srgb, var(--ink) 15%, transparent);
+  border-radius: 12px;
+  padding: 13px 14px 11px;
+  margin: 14px 0;
+  background: var(--surface, var(--paper));
+  min-width: 0;
+  color: var(--ink);
+}
+.sketch-mode-control legend {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 5px;
+}
+.sketch-mode-track {
+  position: relative;
+  padding: 2px 8px;
+}
+.sketch-mode-track input {
+  width: 100%;
+  margin: 0;
+  position: relative;
+  z-index: 1;
+  accent-color: var(--accent, #52714d);
+  cursor: ew-resize;
+}
+.sketch-mode-stops {
+  position: absolute;
+  inset: 2px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+}
+.sketch-mode-stops i {
+  height: 5px;
+  width: 5px;
+  border-radius: 50%;
+  background: var(--accent, #52714d);
+}
+.sketch-mode-labels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 8px;
+}
+.sketch-mode-labels button {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 8px 2px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  font: inherit;
+  font-size: 11px;
+}
+.sketch-mode-labels b {
+  font-size: 13px;
+}
+.sketch-mode-labels button[aria-pressed='true'] {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent, #52714d) 45%, transparent);
+  background: color-mix(in srgb, var(--accent, #52714d) 12%, var(--surface, var(--paper)));
+}
+.sketch-mode-labels button:focus-visible {
+  outline: 2px solid var(--accent, #52714d);
+  outline-offset: 2px;
+}
+.sketch-mode-control p {
+  color: var(--muted);
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.8;
+  min-height: 3.6em;
+}

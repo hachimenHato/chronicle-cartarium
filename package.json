@@ -1,0 +1,61 @@
+{
+  "name": "chronicle-cartarium",
+  "version": "0.2.0-beta.16",
+  "private": true,
+  "license": "0BSD",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite\"",
+    "build": "node scripts/build.mjs",
+    "start": "tsx server/index.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "db:migrate": "tsx server/migrate.ts",
+    "typecheck": "tsc --noEmit",
+    "test:mysql": "node --import tsx --env-file=.env scripts/test-mysql.mjs",
+    "format": "prettier --write src shared server tests scripts docs *.json *.ts *.md",
+    "format:check": "prettier --check src shared server tests scripts docs *.json *.ts *.md",
+    "test:ui": "npm run build && playwright test",
+    "launch": "node scripts/launch.mjs",
+    "package:beta": "npm run build && node scripts/package-beta.mjs"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
+    "@xyflow/react": "^12.8.0",
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "d3-delaunay": "^6.0.4",
+    "d3-geo": "^3.1.1",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "lucide-react": "^0.468.0",
+    "multer": "^2.0.2",
+    "mysql2": "^3.14.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "tar": "7.5.22",
+    "tsx": "^4.19.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/d3-delaunay": "^6.0.4",
+    "@types/d3-geo": "^3.1.1",
+    "@types/express": "^5.0.0",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "concurrently": "^9.1.0",
+    "prettier": "^3.9.8",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

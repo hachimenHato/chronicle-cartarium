@@ -1,0 +1,86 @@
+.map-layer-bar {
+  margin: 0 0 18px;
+  padding: 13px 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.map-layer-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.map-layer-heading svg {
+  color: var(--green);
+}
+.map-layer-heading span {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+.map-layer-buttons {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
+}
+.map-layer-buttons button {
+  min-height: 43px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.map-layer-buttons button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--line);
+}
+.map-layer-buttons button[aria-pressed='true'],
+.map-layer-buttons button[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--green);
+  color: var(--surface);
+  border-color: var(--green);
+  box-shadow: 0 3px 8px #203b241a;
+}
+.map-layer-buttons button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.map-layer-buttons button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+@media (max-width: 1100px) {
+  .map-layer-buttons {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .map-layer-bar {
+    padding: 11px;
+  }
+  .map-layer-heading span {
+    display: none;
+  }
+  .map-layer-buttons {
+    gap: 5px;
+  }
+  .map-layer-buttons button {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 2px;
+    font-size: 11px;
+  }
+}

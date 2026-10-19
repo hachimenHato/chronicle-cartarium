@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+mysql.txt
+data
+uploads
+.runtime
+.worldloom
+*.private.pem
+*.pem
+.git
+*.log

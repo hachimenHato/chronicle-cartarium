@@ -1,0 +1,34 @@
+name: Publish container
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ghcr.io/hachimenhato/chronicle-cartarium:${{ steps.version.outputs.value }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/hachimenHato/chronicle-cartarium
+            org.opencontainers.image.licenses=0BSD
+            org.opencontainers.image.version=${{ steps.version.outputs.value }}
