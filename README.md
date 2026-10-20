@@ -23,6 +23,8 @@
 
 ### 下载使用
 
+Windows 另提供独立窗口的**桌面版 ZIP**：完整解压后双击 `Chronicle Cartarium.exe`，无需 CMD、系统浏览器或首次联网安装依赖。原 CMD 版继续保留；桌面版数据与已有工作台使用方式见 [桌面版说明](docs/desktop.md)。
+
 在 [Releases](https://github.com/hachimenHato/chronicle-cartarium/releases) 选择匹配系统和 CPU 的包，解压到**可写的新目录**。Windows 双击 `start.cmd`；Linux 执行 `sh start.sh`；macOS 双击 `start.command` 或执行 `sh start.sh`。
 
 访问 **http://localhost:3001/**，按向导选择数据库、访问方式和主题，创建自己的主管理员账号。没有通用默认密码。首次启动准备 npm 依赖需要联网；带运行时的包无需另装 Node.js。不要混用各系统的运行时或 `node_modules`。

@@ -17,6 +17,7 @@ const files = [
   'scripts',
   'docs',
   'tests',
+  'desktop',
   'package.json',
   'package-lock.json',
   'tsconfig.json',
@@ -52,9 +53,17 @@ for (const file of files)
     filter: (source) => {
       const name = path.basename(source);
       return (
-        !['.env', 'mysql.txt', 'installation.json', 'users.json', '.npmrc', 'runner.key'].includes(
-          name,
-        ) &&
+        ![
+          'node_modules',
+          '.desktop',
+          'workspace',
+          '.env',
+          'mysql.txt',
+          'installation.json',
+          'users.json',
+          '.npmrc',
+          'runner.key',
+        ].includes(name) &&
         !(name.startsWith('.env.') && name !== '.env.example') &&
         !name.endsWith('.pem') &&
         path.resolve(source) !==

@@ -1,4 +1,5 @@
 node_modules
+**/node_modules
 dist
 .env
 mysql.txt
@@ -10,3 +11,8 @@ uploads
 *.pem
 .git
 *.log
+.desktop
+workspace
+**/.desktop
+*.ccbackup
+*.wlbackup

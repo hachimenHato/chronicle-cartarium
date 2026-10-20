@@ -20,3 +20,5 @@ uploads/
 test-results/
 playwright-report/
 coverage/
+.desktop/
+workspace/

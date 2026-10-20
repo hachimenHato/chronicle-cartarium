@@ -426,3 +426,13 @@ World新增可选entityTemplates:Partial<Record<EntityType,string[]>>，没有�
 MySQL迁移004增加world.entity_templates JSON NULL，在既有schema锁下检查列类型/可空，再记录版本4；ALTER后未记录版本的中断可恢复，NULL读取时省略字段。基础schema001保持不可变。SQLite无需新表或user_version变化，世界聚合JSON即保存可选字段。JSON备份格式仍1，旧服务端不保证接受新字段，迁移时使用本次构建；GM Markdown仅列已选条目类别的自定义定义，公开输出不附配置定义。
 
 TemplateSettings以Modal局部草稿支持增删改序、恢复和取消，使用未保存离开保护；按钮“应用模板”并非落盘承诺，上方自动保存状态提供实际结果。应用错误留在窗口；网络保存失败由全局错误/冲突提示与备份/重试处理。EntityEditor只在非编辑状态允许打开模板设置，避免改模板覆盖条目本地草稿；已保留项标注“条目额外字段”。单条额外字段新增使用trim后的安全/重复检查，避免带空格名称把已有值覆盖成空。
+
+## Windows 桌面附加包
+
+`desktop/main.cjs` 提供 Electron 独立窗口和原生菜单，渲染进程关闭 Node 集成、开启上下文隔离和沙箱，不提供通用 IPC。仅加载已选本机工作台的 origin，阻止任意外部导航和弹窗；导出使用原生保存窗口。名称取自 shared/brand.json，图标由现有 favicon 矢量渲染。
+
+`desktop/service.cjs` 管理相同 Node 后端：从干净 resources/backend 模板复制到全新的同级临时目录，再原子改名为 workspace；已有实例绝不被模板覆盖。内置独立 Node/npm 和生产依赖，初次使用不执行联网安装。继承环境中的数据库、数据目录、Node 注入与旧更新身份变量被移除；选择的工作台私有配置及固定 dataDir 仍生效。桌面自己启动的服务仅监听 loopback。
+
+已有服务必须以所选目录的控制钥匙完成健康确认才附接；持久 PID 不作为停止权限依据。附接服务的窗口退出不发送 shutdown。自己启动的服务经受保护接口正常停止，并等待固定启动器退出；挂起/运行更新任务时拒绝中断。后端依然执行登录、模块/逐条权限与 revision 校验，桌面不绕过主管理员授权。
+
+桌面 ZIP 是额外发行，原 CMD/服务器和其他系统包保留。桌面壳升级与 workspace 内受签名后端更新分开，不能删数据或自动覆盖旧 workspace。源码构建/四项保护单测/原生 GUI 与 CMD 附接测试见 docs/desktop.md；测试只在 .runtime 下新建合成 SQLite 实例。商业代码签名、安装器、桌面壳自动升级和全部断电场景未完成，不将便携程序当作这些功能已经实现。

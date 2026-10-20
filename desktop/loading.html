@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'"
+  />
+  <title>创作工作台</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f3f1e8;
+      color: #23483e;
+      font:
+        15px 'Microsoft YaHei',
+        sans-serif;
+    }
+    .card {
+      width: min(520px, 85vw);
+      padding: 48px;
+      text-align: center;
+      border: 1px solid #cdd5c7;
+      border-radius: 24px;
+      background: #fffdf5;
+      box-shadow: 0 24px 80px #163b3412;
+    }
+    .seal {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 24px;
+      border-radius: 22px;
+      display: grid;
+      place-items: center;
+      background: #163b34;
+      color: #d8c99e;
+      font-size: 36px;
+      font-family: serif;
+    }
+    h1 {
+      font:
+        32px 'Microsoft YaHei',
+        serif;
+      letter-spacing: 5px;
+      margin: 0 0 10px;
+    }
+    .english {
+      color: #7b8a76;
+      font-size: 12px;
+      letter-spacing: 3px;
+    }
+    #status {
+      line-height: 1.8;
+      margin-top: 32px;
+    }
+    .track {
+      height: 3px;
+      overflow: hidden;
+      background: #e2e8dc;
+      border-radius: 4px;
+      margin: 24px 0;
+    }
+    .track:after {
+      content: '';
+      display: block;
+      width: 40%;
+      height: 100%;
+      background: #6c8a5e;
+      animation: travel 1.8s ease-in-out infinite;
+    }
+    @keyframes travel {
+      0% {
+        transform: translateX(-100%);
+      }
+      100% {
+        transform: translateX(350%);
+      }
+    }
+    small {
+      color: #7e877a;
+      line-height: 1.8;
+      display: block;
+    }
+  </style>
+  <main class="card">
+    <div class="seal">◇</div>
+    <h1 id="brand-name">创作工作台</h1>
+    <div class="english" id="brand-english"></div>
+    <p id="status">正在准备创作工作台…</p>
+    <div class="track"></div>
+    <small>世界设定 · 地图 · 人物 · 故事<br />内容始终保存在自己的电脑中</small>
+  </main>
+</html>

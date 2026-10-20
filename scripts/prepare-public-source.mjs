@@ -6,7 +6,7 @@ const destination = path.resolve(process.argv[2] || '');
 if (!destination.startsWith(path.join(root, '.runtime', 'publishing') + path.sep))
   throw new Error('Use a new publishing subdirectory');
 await mkdir(destination); // Existing snapshots are never overwritten.
-const directories = ['src', 'server', 'shared', 'scripts', 'tests', 'public', '.github'];
+const directories = ['src', 'server', 'shared', 'scripts', 'tests', 'public', '.github', 'desktop'];
 const files = [
   'package.json',
   'package-lock.json',
@@ -39,6 +39,8 @@ for (const item of [...directories, ...files]) {
       recursive: true,
       errorOnExist: true,
       force: false,
+      filter: (filename) =>
+        !['node_modules', '.desktop', 'workspace'].includes(path.basename(filename)),
     });
   } catch (error) {
     if (!(item === '.github' && error.code === 'ENOENT')) throw error;

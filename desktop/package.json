@@ -1,0 +1,12 @@
+{
+  "name": "chronicle-cartarium-desktop",
+  "version": "0.2.0-beta.16",
+  "private": true,
+  "license": "0BSD",
+  "main": "main.cjs",
+  "description": "Chronicle Cartarium Windows desktop companion; the CMD/server distribution remains available.",
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.9.0"
+  }
+}
