@@ -40,6 +40,7 @@ const files = [
   'Dockerfile',
   '.dockerignore',
   'docker-compose.yml',
+  'docker-compose.image.yml',
 ];
 await access(path.join(root, 'dist', 'index.html'));
 await mkdir(path.dirname(destination), { recursive: true });

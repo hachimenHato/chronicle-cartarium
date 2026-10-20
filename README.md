@@ -41,13 +41,13 @@ node scripts/launch.mjs
 
 ### Docker 与服务器
 
-在私有 `.env` 设置至少 24 字符的随机 `CHRONICLE_CARTARIUM_SETUP_TOKEN` 后：
+在私有 `.env` 设置至少 24 字符的随机 `CHRONICLE_CARTARIUM_SETUP_TOKEN` 后，可直接使用已发布的 Linux amd64/arm64 镜像：
 
 ```sh
-docker compose up -d --build
+docker compose -f docker-compose.image.yml up -d
 ```
 
-在向导中输入授权码，选择 SQLite 或自己的 MySQL。Compose 使用持久数据卷，不捆绑 MySQL 服务。公网部署应使用 HTTPS、`COOKIE_SECURE=true`，仅在可信代理后设置 `TRUST_PROXY=true`。详见 [安装说明](docs/installation.md)。不要删除数据卷来升级。
+也可执行 `docker compose up -d --build` 从源码构建。在向导中输入授权码，选择 SQLite 或自己的 MySQL。Compose 使用持久数据卷，不捆绑 MySQL 服务。公网部署应使用 HTTPS、`COOKIE_SECURE=true`，仅在可信代理后设置 `TRUST_PROXY=true`。详见 [安装说明](docs/installation.md)。不要删除数据卷来升级。
 
 ## 数据保护与更新
 

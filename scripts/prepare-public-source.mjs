@@ -31,6 +31,7 @@ const files = [
   'start.command',
   'Dockerfile',
   'docker-compose.yml',
+  'docker-compose.image.yml',
 ];
 for (const item of [...directories, ...files]) {
   try {

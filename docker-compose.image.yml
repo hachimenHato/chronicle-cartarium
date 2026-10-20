@@ -1,0 +1,19 @@
+services:
+  app:
+    image: ghcr.io/hachimenhato/chronicle-cartarium:0.2.0-beta.16
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      SETUP_TOKEN: ${CHRONICLE_CARTARIUM_SETUP_TOKEN:?Set a private random bootstrap token of at least 24 characters}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      DATA_DIR: /app/data
+      CHRONICLE_CARTARIUM_DEPLOYMENT: docker
+    volumes:
+      - worldloom_data:/app/data
+volumes:
+  worldloom_data:

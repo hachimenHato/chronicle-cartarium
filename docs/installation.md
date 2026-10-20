@@ -28,7 +28,7 @@ MySQL 向导要求新建项目库，库名必须不存在；使用有相应建�
 
 ## Docker
 
-需要 Docker Engine / Docker Desktop 与 Compose v2。在安装根私有 `.env` 配置随机 `CHRONICLE_CARTARIUM_SETUP_TOKEN`，然后 `docker compose up -d --build`。打开 3001 端口网页完成二选一安装。
+需要 Docker Engine / Docker Desktop 与 Compose v2。在安装根私有 `.env` 配置随机 `CHRONICLE_CARTARIUM_SETUP_TOKEN`，然后 `docker compose -f docker-compose.image.yml up -d` 使用公开预构建的 Linux amd64/arm64 镜像；也可用 `docker compose up -d --build` 从源码构建。打开 3001 端口网页完成二选一安装。
 
 Compose 默认以命名卷持久化 `/app/data`，不捆绑 MySQL。容器连宿主机的 MySQL 时，`localhost` 是容器自身，需要使用宿主机可达地址。更新保留 Compose 项目名、卷与私有配置，**不得执行 `down -v` 或清理持久卷**。Docker 使用宿主机更新流程，不使用容器内自动替换程序；详见更新文档。
 

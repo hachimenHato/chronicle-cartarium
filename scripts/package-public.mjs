@@ -51,8 +51,12 @@ for (const target of targets) {
   console.log(`Preparing ${target}: official ${nodeVersion} runtime`);
   const archivePath = path.join(cache, archive);
   let bytes;
-  try { bytes = await readFile(archivePath); }
-  catch (error) { if (error.code !== 'ENOENT') throw error; bytes = await download(base + archive, archivePath); }
+  try {
+    bytes = await readFile(archivePath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    bytes = await download(base + archive, archivePath);
+  }
   if (createHash('sha256').update(bytes).digest('hex') !== expected)
     throw new Error('Runtime checksum mismatch');
   const name = `chronicle-cartarium-${version}-${target}`;
@@ -77,7 +81,12 @@ for (const target of targets) {
   } else {
     // npm/npx/Corepack command symlinks are unnecessary: launch.mjs invokes npm-cli.js directly.
     // Skipping links also permits cross-packaging on Windows without symlink privileges.
-    await x({ cwd: extraction, file: archivePath, strict: true, filter: (_, entry) => !['SymbolicLink', 'Link'].includes(entry.type) });
+    await x({
+      cwd: extraction,
+      file: archivePath,
+      strict: true,
+      filter: (_, entry) => !['SymbolicLink', 'Link'].includes(entry.type),
+    });
   }
   const runtime = path.join(directory, 'runtime');
   await rename(path.join(extraction, runtimeName), runtime);
@@ -143,8 +152,8 @@ for (const target of targets) {
         gzip: true,
         portable: true,
         onWriteEntry: (entry) => {
-            if (/\/(runtime\/node|start\.(sh|command))$/.test(entry.path) && entry.stat)
-              entry.stat.mode = (entry.stat.mode & ~0o777) | 0o755;
+          if (/\/(runtime\/node|start\.(sh|command))$/.test(entry.path) && entry.stat)
+            entry.stat.mode = (entry.stat.mode & ~0o777) | 0o755;
         },
       },
       [name],
