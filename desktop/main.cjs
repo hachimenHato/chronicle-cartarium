@@ -221,7 +221,7 @@ async function initialize() {
     item.setSaveDialogOptions({
       title: '保存导出文件',
       defaultPath: path.join(app.getPath('downloads'), name),
-      showOverwriteConfirmation: true,
+      properties: ['showOverwriteConfirmation'],
     });
   });
   Menu.setApplicationMenu(
