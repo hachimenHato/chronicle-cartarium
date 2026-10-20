@@ -45,7 +45,7 @@ jobs:
             sleep 1
           done
           node -e "const s=JSON.parse(require('fs').readFileSync('/tmp/cc-status.json'));if(!s.setupRequired)process.exit(1)"
-          curl --fail --silent -c /tmp/cc-cookies -H 'Content-Type: application/json' --data '{"storage":"sqlite","title":"Isolated CI","theme":"jade","access":"local","username":"ci_gm","password":"ci-test-password-only","fillExample":false,"setupToken":"ci-isolated-bootstrap-test-only"}' http://127.0.0.1:3312/api/install > /tmp/cc-install.json
+          curl --fail --silent -c /tmp/cc-cookies -H 'X-Chronicle-Cartarium-Setup-Token: ci-isolated-bootstrap-test-only' -H 'Content-Type: application/json' --data '{"storage":"sqlite","title":"Isolated CI","theme":"jade","access":"local","username":"ci_gm","password":"ci-test-password-only","fillExample":false}' http://127.0.0.1:3312/api/install > /tmp/cc-install.json
           curl --fail --silent -b /tmp/cc-cookies http://127.0.0.1:3312/api/workspace > /tmp/cc-workspace.json
           node -e "const s=JSON.parse(require('fs').readFileSync('/tmp/cc-workspace.json'));if(s.data.worlds.length!==0)process.exit(1)"
           docker restart cc-smoke
