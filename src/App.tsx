@@ -160,6 +160,8 @@ export default function App() {
           initial={initial}
           appSettings={appSettings}
           managed={installation?.setupRequired !== undefined}
+          loginEnabled={installation?.loginRequired ?? false}
+          onAccessChanged={load}
           onActor={(actor) =>
             setInstallation((previous) => (previous ? { ...previous, actor } : previous))
           }
@@ -255,6 +257,8 @@ function Studio({
   onSettings,
   managed,
   onActor,
+  loginEnabled,
+  onAccessChanged,
 }: {
   initial: WorkspaceEnvelope;
   onLogout: () => void;
@@ -262,6 +266,8 @@ function Studio({
   onSettings: (settings: ApplicationSettings) => void;
   managed: boolean;
   onActor: (actor: UserAccount) => void;
+  loginEnabled: boolean;
+  onAccessChanged: () => Promise<void>;
 }) {
   const access = useAccess();
   const { data, setData, status, error, retry, replaceSaved, revision, reloadWhenSaved } =
@@ -277,6 +283,7 @@ function Studio({
   const [newOpen, setNewOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [securityRevision, setSecurityRevision] = useState(0);
   const [worldForm, setWorldForm] = useState<World | null>(null);
   const [templateType, setTemplateType] = useState<EntityType>();
   const [typeSettings, setTypeSettings] = useState(false);
@@ -517,6 +524,8 @@ function Studio({
     return (
       <>
         <EmptyWorkbench
+          loginEnabled={loginEnabled}
+          onAccessChanged={onAccessChanged}
           data={data}
           managed={managed}
           onTutorial={() => setTourOpen(true)}
@@ -1211,33 +1220,43 @@ function Studio({
                   {access.owner ? '主管理员' : access.administrator ? '次级管理员' : '普通用户'}
                   。普通用户只看到获准查看的内容，私密内容由服务端筛选。
                 </p>
-                <button
-                  className="text-btn"
-                  disabled={status !== 'saved' || editorDirty}
-                  title={
-                    status !== 'saved' || editorDirty
-                      ? '请先保存编辑器内容并等待写入完成'
-                      : undefined
-                  }
-                  onClick={async () => {
-                    try {
-                      await request('/api/logout', { method: 'POST' });
-                      onLogout();
-                    } catch (e) {
-                      setNotice((e as Error).message);
+                {loginEnabled && (
+                  <button
+                    className="text-btn"
+                    disabled={status !== 'saved' || editorDirty}
+                    title={
+                      status !== 'saved' || editorDirty
+                        ? '请先保存编辑器内容并等待写入完成'
+                        : undefined
                     }
-                  }}
-                >
-                  <LogOut size={15} /> 退出工作台
-                </button>
+                    onClick={async () => {
+                      try {
+                        await request('/api/logout', { method: 'POST' });
+                        onLogout();
+                      } catch (e) {
+                        setNotice((e as Error).message);
+                      }
+                    }}
+                  >
+                    <LogOut size={15} /> 退出工作台
+                  </button>
+                )}
               </div>
               {managed && !access.owner && <AccountSettings />}
-              {managed && access.administrator && <UserManagement data={data} />}
+              {managed && access.administrator && (
+                <UserManagement
+                  data={data}
+                  loginEnabled={loginEnabled}
+                  onModeChanged={() => setSecurityRevision((value) => value + 1)}
+                />
+              )}
               {managed && access.owner && (
                 <AdminSettings
+                  key={securityRevision}
                   revision={revision.current}
                   canReset={status === 'saved' && !editorDirty}
                   onSettings={onSettings}
+                  onAccessChanged={onAccessChanged}
                   onReset={(result) => {
                     const envelope = result.envelope;
                     replaceSaved(envelope);

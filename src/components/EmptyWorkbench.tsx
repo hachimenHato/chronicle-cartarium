@@ -21,6 +21,8 @@ export function EmptyWorkbench({
   data,
   managed,
   onTutorial,
+  loginEnabled,
+  onAccessChanged,
 }: {
   onCreate: (name: string) => void;
   onLogout: () => void;
@@ -33,10 +35,13 @@ export function EmptyWorkbench({
   data: Workspace;
   managed: boolean;
   onTutorial: () => void;
+  loginEnabled: boolean;
+  onAccessChanged: () => Promise<void>;
 }) {
   const access = useAccess();
   const [name, setName] = useState('');
   const [panel, setPanel] = useState<'guide' | 'settings'>();
+  const [securityRevision, setSecurityRevision] = useState(0);
   return (
     <main className="empty-workbench">
       <Hexagon size={46} strokeWidth={1.1} />
@@ -80,10 +85,12 @@ export function EmptyWorkbench({
           <Settings2 size={16} />
           后台设置
         </button>
-        <button className="text-btn" onClick={onLogout}>
-          <LogOut size={15} />
-          退出登录
-        </button>
+        {loginEnabled && (
+          <button className="text-btn" onClick={onLogout}>
+            <LogOut size={15} />
+            退出登录
+          </button>
+        )}
       </div>
       {error && (
         <p className="inline-error" role="alert">
@@ -105,14 +112,22 @@ export function EmptyWorkbench({
             <Guide />
           ) : (
             <>
-              {managed && access.administrator && <UserManagement data={data} />}
+              {managed && access.administrator && (
+                <UserManagement
+                  data={data}
+                  loginEnabled={loginEnabled}
+                  onModeChanged={() => setSecurityRevision((v) => v + 1)}
+                />
+              )}
               {managed && !access.owner && <AccountSettings />}
               {managed && access.owner && (
                 <AdminSettings
+                  key={securityRevision}
                   revision={revision}
                   canReset={canReset}
                   onReset={onReset}
                   onSettings={onSettings}
+                  onAccessChanged={onAccessChanged}
                 />
               )}
             </>

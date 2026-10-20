@@ -2,7 +2,7 @@
 
 ## 选择安装包
 
-Windows x64 包用于普通 Intel/AMD 64 位电脑。Linux x64/arm64 包用于相应架构的 glibc Linux；不适用于 Alpine/musl。macOS x64 用于 Intel，arm64 用于 Apple Silicon。每个包的运行时只适用于标明的平台；首次启动仍需要网络下载 npm 依赖。源码可在 Node.js 22.18+ 与 npm 环境构建。
+Windows 提供两种 x64 包，均用于普通 Intel/AMD 64 位电脑：`windows-desktop-x64.zip` 是独立窗口版，完整解压后双击 `Chronicle Cartarium.exe`，无需浏览器或联网安装依赖；`win-x64.zip` 是保留的 CMD/服务器版。两者为独立下载项，详见 [桌面版](desktop.md)。Linux x64/arm64 包用于相应架构的 glibc Linux；不适用于 Alpine/musl。macOS x64 用于 Intel，arm64 用于 Apple Silicon。每个包的运行时只适用于标明的平台；CMD/Linux/macOS 包首次启动需要网络下载 npm 依赖。源码可在 Node.js 22.18+ 与 npm 环境构建。
 
 Windows：解压到可写目录后双击 `start.cmd`。Linux：执行 `sh start.sh`。macOS：执行 `sh start.sh`，或给予 `start.command` 执行权限后打开；下载的运行时没有 Apple 公证安装器，请按系统安全提示自行核对来源，不应全局关闭系统保护。
 
@@ -12,7 +12,9 @@ Windows：解压到可写目录后双击 `start.cmd`。Linux：执行 `sh start.
 
 1. 二选一：本地 SQLite（无需数据库软件）或 MySQL 8。
 2. 选择本机/服务器访问方式、名称与主题。
-3. 设置主管理员账号和至少十字符密码，可选填充完整范例。
+3. 登录默认开启，设置主管理员登录名和至少十字符密码；可选关闭登录，此时不要求账号密码，多用户不可用。也可直接开启多用户，登录将保持开启。可选填充完整范例。
+
+后台“登录与访问保护”可随时修改：重新开启必须设置有效登录名/密码；关闭需确认主管理员当前密码，多用户模式开启期间禁止关闭。免登录意味着任何能访问此地址的人都拥有主管理员权限。关闭登录或多用户不会删除创作资料或其他用户账户；重新开启登录需重新设置凭据，旧安装继续默认需要登录。
 
 MySQL 向导要求新建项目库，库名必须不存在；使用有相应建库权限的账号。不能把其他软件已有数据库作为安装目标。没有统一默认管理员密码。默认空白安装，可从侧栏重新打开工具教学。
 

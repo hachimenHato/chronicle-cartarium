@@ -2,7 +2,7 @@
 
 **为 TRPG 主持人与世界构建者准备的地图、设定、人物关系与剧情工作台。**
 
-通过浏览器使用，部署在自己的电脑或服务器。首次安装明确选择 **本地 SQLite** 或 **MySQL**，本地模式无需另装数据库。中文界面，目前为 **0.2.0-beta.16 公开测试版**。
+通过浏览器使用，部署在自己的电脑或服务器。首次安装明确选择 **本地 SQLite** 或 **MySQL**，本地模式无需另装数据库。中文界面，目前为 **0.2.0-beta.17 公开测试版**。
 
 [下载发行版](https://github.com/hachimenHato/chronicle-cartarium/releases) · [安装与部署](docs/installation.md) · [更新与数据保护](docs/update-strategy.md) · [问题反馈](https://github.com/hachimenHato/chronicle-cartarium/issues)
 
@@ -19,6 +19,33 @@
 
 安装时可选原创日式中世纪剑与魔法范例：85 条世界设定、20 位人物、4 张地图、30 条关系、18 个剧情场景及 GM 计划等。默认不填充。
 
+## 界面预览
+
+以下为软件真实界面，使用自带的虚构“月汐诸国”范例，不含个人创作或账号资料。
+
+**地图工坊**：羊皮纸地图、地形细节、聚落与交通，以及可切换的地理图层。
+
+![地图工坊：月汐群岛总图与地图图层](docs/screenshots/map-workshop.png)
+
+**创作仪表盘**：查看设定、人物、地图和剧情数量，安排创作与备团任务。
+
+![创作仪表盘：设定查漏与备团状态](docs/screenshots/dashboard.png)
+
+## 版本与平台支持
+
+当前提供公开测试版，尚未宣称达到正式生产版的稳定性。桌面版和 CMD/服务器版使用相同的创作格式；桌面版是独立附加下载，原 CMD 版继续保留。
+
+| 下载形式           | 支持平台 / CPU                    | 使用方式                                                            | 验证范围                                                                        |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Windows 桌面窗口版 | Windows x64                       | 完整解压，双击 `Chronicle Cartarium.exe`；内置运行组件，无需浏览器  | Windows 实机验证安装、地图、导出和重启保留数据；未做商业代码签名，无安装/卸载器 |
+| Windows CMD 版     | Windows x64                       | `start.cmd` 后通过浏览器访问；适合本机或服务器                      | Windows 原生 CI 与本机启动/保存/重开验证                                        |
+| Linux 版           | Linux x64、arm64                  | `sh start.sh` 后通过浏览器访问                                      | x64 原生 CI；arm64 完成打包校验，未做原生完整验收                               |
+| macOS 版           | Intel x64、Apple Silicon arm64    | `start.command` 或 `sh start.sh` 后浏览器访问                       | arm64 原生 CI；Intel 包完成打包校验，未做原生完整验收；无独立桌面窗口版         |
+| Docker             | Linux amd64、arm64 镜像           | Compose 部署，浏览器访问；Windows/macOS 需 Docker 的 Linux 容器环境 | amd64 安装/持久卷重启/登录 CI；arm64 镜像构建，未做原生完整验收                 |
+| 源码               | Node.js 22.18+，SQLite 或 MySQL 8 | 自行构建与部署；桌面构建目前仅 Windows x64                          | Windows / Linux / macOS 类型检查、单元测试与构建 CI                             |
+
+具体版本的附件、功能和实测范围以 [对应 Release](https://github.com/hachimenHato/chronicle-cartarium/releases) 为准。`main` 可能包含尚未进入下载包的功能；旧版附件不会因源码更新而自动改变。所有平台的完整升级、断电恢复与公网场景均未全面验收。
+
 ## 快速开始
 
 ### 下载使用
@@ -27,7 +54,7 @@ Windows 另提供独立窗口的**桌面版 ZIP**：完整解压后双击 `Chron
 
 在 [Releases](https://github.com/hachimenHato/chronicle-cartarium/releases) 选择匹配系统和 CPU 的包，解压到**可写的新目录**。Windows 双击 `start.cmd`；Linux 执行 `sh start.sh`；macOS 双击 `start.command` 或执行 `sh start.sh`。
 
-访问 **http://localhost:3001/**，按向导选择数据库、访问方式和主题，创建自己的主管理员账号。没有通用默认密码。首次启动准备 npm 依赖需要联网；带运行时的包无需另装 Node.js。不要混用各系统的运行时或 `node_modules`。
+访问 **http://localhost:3001/**，按向导选择数据库、访问方式和主题。登录默认开启，需要自行设置主管理员登录名和密码；也可选择免登录，不要求账号密码，此时无法开启多用户。安装时可直接开启多用户，以后也可在后台调整；多用户开启期间不能关闭登录。没有通用默认密码。CMD/Linux/macOS 包首次启动准备 npm 依赖需要联网；带运行时的包无需另装 Node.js。不要混用各系统的运行时或 `node_modules`。
 
 ### 从源码运行
 
@@ -81,6 +108,12 @@ npm run test:ui
 真实 MySQL 测试以 `npm run test:mysql` 显式启用，只操作测试自身创建的新临时库。
 
 [架构](docs/architecture.md) · [范例地图](docs/example-maps.md) · [素材来源](docs/cover-presets.md) · [安全说明](SECURITY.md) · [接手入口](docs/handoff.md)
+
+## AI 制作说明与免责声明
+
+本项目主要通过 AI（ChatGPT / Codex）协助设计、编写与迭代，包含部分 AI 生成的范例文字和封面插画。已执行自动化测试与部分实机验证，但代码、文档、地图和设定仍可能存在错误、遗漏或不符合预期的结果；不能将 AI 生成内容视为经过专业审核的科学、法律或其他专业意见。
+
+软件按下述 0BSD 许可“按原样”提供，不作适用性或无错误保证。公开测试版请先试用，并在升级、迁移或重要操作前验证完整备份；发现问题可提交 [Issue](https://github.com/hachimenHato/chronicle-cartarium/issues)。上游组件保留其各自许可，AI 辅助制作不改变这些许可要求。
 
 ## 许可
 

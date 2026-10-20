@@ -33,6 +33,11 @@ const backupsManager = await InstallationManager.open(backupsConfig, (filename) 
 );
 const backupsApp = await createApp(backupsConfig, backupsManager);
 const router = express();
+const policyConfig = { ...config, dataDir: path.join(directory, 'login-policy') };
+const policyManager = await InstallationManager.open(policyConfig, (filename) =>
+  new DemoStore(filename + '.json', createEmptyWorkspace).initialize(),
+);
+router.use('/__policy', await createApp(policyConfig, policyManager));
 router.use('/__installation', installApp);
 router.use('/__multiuser', multiuserApp);
 router.use('/__backups', backupsApp);

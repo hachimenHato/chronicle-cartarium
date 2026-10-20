@@ -1,5 +1,6 @@
 import type { GeneratedGeography } from '../../shared/geography';
 import { pointInPolygon } from './terrain';
+import { plateDisplayName } from '../../shared/plate-names';
 import type { DivisionKind, MapPoint } from '../../shared/cartography';
 export function cellAt(g: GeneratedGeography, point: MapPoint) {
   return g.cells.find((c) => pointInPolygon(point, c.polygon));
@@ -64,6 +65,10 @@ export function preserveGeographicNames(
   if (!previous) return next;
   return {
     ...next,
+    plates: next.plates.map((plate) => {
+      const old = previous.plates.find((p) => p.id === plate.id);
+      return old ? { ...plate, name: plateDisplayName(old, previous.seed) } : plate;
+    }),
     areas: next.areas.map((a) => {
       const old = previous.areas.find((o) => o.id === a.id);
       return old ? { ...a, name: old.name, entityId: old.entityId } : a;

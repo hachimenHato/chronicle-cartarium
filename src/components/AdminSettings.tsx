@@ -7,6 +7,7 @@ import {
 } from '../../shared/application';
 import { request } from '../lib/api';
 import { BackupSettings } from './BackupSettings';
+import { LoginSettings } from './LoginSettings';
 export function applyTheme(theme: string) {
   document.documentElement.dataset.theme = theme;
 }
@@ -15,7 +16,9 @@ export function resetNotice(result: ResetResult) {
 }
 interface AdminInfo {
   settings: ApplicationSettings;
-  username: string;
+  username?: string;
+  loginEnabled: boolean;
+  multiUser: boolean;
   storage: string;
   version: string;
   node: string;
@@ -26,11 +29,13 @@ export function AdminSettings({
   canReset,
   onReset,
   onSettings,
+  onAccessChanged,
 }: {
   revision: number;
   canReset: boolean;
   onReset: (value: ResetResult) => void;
   onSettings: (value: ApplicationSettings) => void;
+  onAccessChanged: () => Promise<void>;
 }) {
   const [info, setInfo] = useState<AdminInfo>();
   const [settings, setSettings] = useState<ApplicationSettings>();
@@ -78,7 +83,18 @@ export function AdminSettings({
     );
   return (
     <div className="admin-settings">
-      <BackupSettings revision={revision} canBackup={canReset} />
+      <BackupSettings revision={revision} canBackup={canReset} loginEnabled={info.loginEnabled} />
+      <LoginSettings
+        key={String(info.loginEnabled)}
+        enabled={info.loginEnabled}
+        multiUser={info.multiUser}
+        username={info.username}
+        canApply={canReset}
+        onApplied={async () => {
+          setInfo(await request<AdminInfo>('/api/admin'));
+          await onAccessChanged();
+        }}
+      />
       <div className="settings-group">
         <h3>后台 · 工作台与主题</h3>
         <form
@@ -147,69 +163,72 @@ export function AdminSettings({
       <div className="settings-group">
         <h3>账号与运行状态</h3>
         <p className="muted">
-          GM：{info.username} · {info.storage === 'sqlite' ? '本地数据库 SQLite' : 'MySQL'}
+          GM：{info.loginEnabled ? info.username : '免登录工作台'} ·{' '}
+          {info.storage === 'sqlite' ? '本地数据库 SQLite' : 'MySQL'}
           <br />
           {info.version} · Node {info.node} ·{' '}
           {info.platform === 'win32' ? 'Windows' : info.platform}
         </p>
-        <form
-          className="form-stack"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (password !== repeat) {
-              setError('两次输入的新密码不一致。');
-              return;
-            }
-            void perform(async () => {
-              await request('/api/admin/password', {
-                method: 'POST',
-                body: JSON.stringify({ currentPassword: current, password }),
+        {info.loginEnabled && (
+          <form
+            className="form-stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (password !== repeat) {
+                setError('两次输入的新密码不一致。');
+                return;
+              }
+              void perform(async () => {
+                await request('/api/admin/password', {
+                  method: 'POST',
+                  body: JSON.stringify({ currentPassword: current, password }),
+                });
+                setCurrent('');
+                setPassword('');
+                setRepeat('');
+                setNotice('密码已更换，其他登录会话已失效。');
               });
-              setCurrent('');
-              setPassword('');
-              setRepeat('');
-              setNotice('密码已更换，其他登录会话已失效。');
-            });
-          }}
-        >
-          <label className="field">
-            当前密码
-            <input
-              type="password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <div className="form-grid">
+            }}
+          >
             <label className="field">
-              新密码
+              当前密码
               <input
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={10}
-                maxLength={72}
-                autoComplete="new-password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                autoComplete="current-password"
                 required
               />
             </label>
-            <label className="field">
-              再次输入新密码
-              <input
-                type="password"
-                value={repeat}
-                onChange={(e) => setRepeat(e.target.value)}
-                autoComplete="new-password"
-                required
-              />
-            </label>
-          </div>
-          <button className="btn" disabled={busy}>
-            更换登录密码
-          </button>
-        </form>
+            <div className="form-grid">
+              <label className="field">
+                新密码
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={10}
+                  maxLength={72}
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+              <label className="field">
+                再次输入新密码
+                <input
+                  type="password"
+                  value={repeat}
+                  onChange={(e) => setRepeat(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+            </div>
+            <button className="btn" disabled={busy}>
+              更换登录密码
+            </button>
+          </form>
+        )}
       </div>
       <div className="settings-group reset-settings">
         <h3>初始化创作内容</h3>

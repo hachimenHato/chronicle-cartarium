@@ -1,4 +1,4 @@
-import brand from './brand.json';
+import brand from './brand.json' with { type: 'json' };
 
 export const BRAND_ZH = brand.nameZh;
 export const BRAND_EN = brand.nameEn;

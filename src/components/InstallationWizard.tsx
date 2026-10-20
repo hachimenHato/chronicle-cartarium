@@ -22,6 +22,8 @@ export function InstallationWizard({
   const [theme, setTheme] = useState<Theme>('parchment');
   const [title, setTitle] = useState(BRAND_TITLE);
   const [username, setUsername] = useState('gm');
+  const [loginEnabled, setLoginEnabled] = useState(true);
+  const [multiUser, setMultiUser] = useState(false);
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
   const [setupToken, setSetupToken] = useState('');
@@ -47,7 +49,7 @@ export function InstallationWizard({
         </h1>
         <p>从一座村落到整片大陆，把人物、地图与尚未发生的故事连接起来。</p>
         <ol>
-          {['选择数据保存方式', '安排工作台与访问方式', '创建你的 GM 账号'].map((label, i) => (
+          {['选择数据保存方式', '安排工作台与访问方式', '设置登录与协作'].map((label, i) => (
             <li key={label} className={step === i ? 'active' : step > i ? 'done' : ''}>
               <span>{step > i ? <Check size={14} /> : i + 1}</span>
               {label}
@@ -65,7 +67,7 @@ export function InstallationWizard({
             setStep(step + 1);
             return;
           }
-          if (password !== repeat) {
+          if (loginEnabled && password !== repeat) {
             setError('两次输入的密码不一致。');
             return;
           }
@@ -84,8 +86,9 @@ export function InstallationWizard({
                 access,
                 theme,
                 title,
-                username,
-                password,
+                loginEnabled,
+                multiUser,
+                ...(loginEnabled ? { username, password } : {}),
                 fillExample: fill,
                 ...(storage === 'mysql' && !status.configuredStorage ? { mysql: db } : {}),
               }),
@@ -249,7 +252,7 @@ export function InstallationWizard({
         ) : (
           <>
             <ShieldCheck size={30} />
-            <h2>创建你的 GM 账号</h2>
+            <h2>设置登录与协作</h2>
             {status.setupTokenRequired && (
               <label className="field">
                 安装授权码
@@ -263,45 +266,75 @@ export function InstallationWizard({
                 <small>使用服务器部署时设置的 SETUP_TOKEN。</small>
               </label>
             )}
-            <p className="muted">此版本是单 GM 工作台。登录后可以管理全部创作内容。</p>
-            <label className="field">
-              用户名
+            <label className="check-row">
               <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                minLength={2}
-                maxLength={40}
-                pattern="[\p{L}\p{N}_.\-]+"
-                autoComplete="username"
-                required
+                type="checkbox"
+                checked={loginEnabled}
+                disabled={multiUser}
+                onChange={(e) => setLoginEnabled(e.target.checked)}
               />
+              开启登录界面
             </label>
-            <div className="form-grid">
-              <label className="field">
-                登录密码
-                <input
-                  type="password"
-                  aria-label="登录密码"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  minLength={10}
-                  maxLength={72}
-                  autoComplete="new-password"
-                  required
-                />
-                <small>至少 10 个字符</small>
-              </label>
-              <label className="field">
-                再次输入密码
-                <input
-                  type="password"
-                  value={repeat}
-                  onChange={(e) => setRepeat(e.target.value)}
-                  autoComplete="new-password"
-                  required
-                />
-              </label>
-            </div>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={multiUser}
+                onChange={(e) => {
+                  setMultiUser(e.target.checked);
+                  if (e.target.checked) setLoginEnabled(true);
+                }}
+              />
+              开启多用户模式
+            </label>
+            <p className="muted">
+              {multiUser
+                ? '多用户需要登录。主管理员可在后台创建普通用户与次级管理员，并分配权限。'
+                : loginEnabled
+                  ? '登录后进入工作台；以后可在后台调整登录与多用户设置。'
+                  : '无需设置账号密码，打开即用。能访问此工作台的人均拥有主管理员权限，多用户不可用。'}
+            </p>
+            {loginEnabled && (
+              <>
+                <label className="field">
+                  用户名
+                  <input
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    minLength={2}
+                    maxLength={40}
+                    pattern="[\p{L}\p{N}_.\-]+"
+                    autoComplete="username"
+                    required
+                  />
+                </label>
+                <div className="form-grid">
+                  <label className="field">
+                    登录密码
+                    <input
+                      type="password"
+                      aria-label="登录密码"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      minLength={10}
+                      maxLength={72}
+                      autoComplete="new-password"
+                      required
+                    />
+                    <small>至少 10 个字符</small>
+                  </label>
+                  <label className="field">
+                    再次输入密码
+                    <input
+                      type="password"
+                      value={repeat}
+                      onChange={(e) => setRepeat(e.target.value)}
+                      autoComplete="new-password"
+                      required
+                    />
+                  </label>
+                </div>
+              </>
+            )}
             <label className="check-row">
               <input type="checkbox" checked={fill} onChange={(e) => setFill(e.target.checked)} />
               填充范例内容

@@ -333,6 +333,8 @@ test('multiuser sessions, role gates, filtered saves, export and disabling take 
   assert.equal((await send('/api/admin/full-backups', 'POST', {}, moderator)).status, 403);
   assert.equal((await send('/api/admin/updates', 'GET', undefined, moderator)).status, 403);
   assert.equal((await send('/api/admin/updates/apply', 'POST', {}, moderator)).status, 403);
+  for (const session of [player, moderator])
+    assert.equal((await send('/api/admin/login', 'PUT', { enabled: false }, session)).status, 403);
   assert.equal(
     (
       await send(

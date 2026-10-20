@@ -109,6 +109,15 @@ export class UserDirectoryStore {
   get enabled() {
     return this.current.enabled;
   }
+  async initializeForInstallation(enabled: boolean) {
+    return this.serial(async () => {
+      if (this.current.revision !== 0 || this.current.users.length)
+        throw new PermissionError('已有用户配置，不能作为全新安装覆盖。');
+      const before = this.current;
+      await this.persist({ ...before, enabled });
+      return () => this.serial(() => this.persist(before));
+    });
+  }
   actor(id: string): UserAccount | undefined {
     if (id === 'owner')
       return {
@@ -124,6 +133,7 @@ export class UserDirectoryStore {
   publicDirectory(): UserDirectory {
     return {
       enabled: this.current.enabled,
+      loginEnabled: Boolean(this.primary()),
       revision: this.current.revision,
       users: [
         this.actor('owner')!,
@@ -176,6 +186,8 @@ export class UserDirectoryStore {
     requireOwner(actor);
     return this.serial(async () => {
       if (revision !== this.current.revision) throw new ConflictError();
+      if (enabled && !this.primary())
+        throw new PermissionError('请先在后台开启登录并设置主管理员账号密码。');
       await this.persist({ ...this.current, enabled, revision: revision + 1 });
       return this.publicDirectory();
     });

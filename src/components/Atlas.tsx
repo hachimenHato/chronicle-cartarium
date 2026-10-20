@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { BRAND_TITLE } from '../../shared/branding';
+import { plateDisplayName } from '../../shared/plate-names';
 import type { PointerEvent as ReactPointerEvent, SVGProps } from 'react';
 import {
   ArrowLeft,
@@ -640,7 +641,11 @@ export default function Atlas({
       if (geographicLayer === 'temperature' || geographicLayer === 'precipitation')
         return climateLegendItems(geographicLayer);
       if (geographicLayer === 'plates')
-        return geography.plates.map((p) => ({ id: String(p.id), label: p.name, color: p.color }));
+        return geography.plates.map((p) => ({
+          id: String(p.id),
+          label: plateDisplayName(p, geography.seed),
+          color: p.color,
+        }));
       if (geographicLayer === 'regions')
         return [
           { id: 'cell', label: '基础单元', color: '#857c69', line: true },

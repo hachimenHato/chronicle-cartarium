@@ -34,6 +34,7 @@ export interface UserAccount {
 }
 export interface UserDirectory {
   enabled: boolean;
+  loginEnabled?: boolean;
   revision: number;
   users: UserAccount[];
 }

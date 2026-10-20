@@ -25,7 +25,15 @@ const emptyUser = (): UserAccount => ({
   canViewPrivate: false,
   tourCompleted: false,
 });
-export function UserManagement({ data }: { data: Workspace }) {
+export function UserManagement({
+  data,
+  onModeChanged,
+  loginEnabled,
+}: {
+  data: Workspace;
+  onModeChanged?: () => void;
+  loginEnabled?: boolean;
+}) {
   const access = useAccess();
   const [directory, setDirectory] = useState<UserDirectory>();
   const [draft, setDraft] = useState<UserAccount>();
@@ -41,7 +49,7 @@ export function UserManagement({ data }: { data: Workspace }) {
       .catch((e: Error) => setError(e.message));
   useEffect(() => {
     void load();
-  }, []);
+  }, [loginEnabled]);
   const perform = async (action: () => Promise<UserDirectory>, message: string) => {
     setBusy(true);
     setError('');
@@ -139,7 +147,7 @@ export function UserManagement({ data }: { data: Workspace }) {
         <input
           type="checkbox"
           checked={directory.enabled}
-          disabled={!access.owner || busy}
+          disabled={!access.owner || busy || directory.loginEnabled === false}
           onChange={(e) => {
             const enabled = e.target.checked;
             const before = directory;
@@ -153,11 +161,17 @@ export function UserManagement({ data }: { data: Workspace }) {
               enabled ? '多用户模式已开启。' : '多用户模式已关闭，其他账户不能继续访问。',
             ).then((ok) => {
               if (!ok) setDirectory(before);
+              else onModeChanged?.();
             });
           }}
         />
         <span>开启多用户模式</span>
       </label>
+      {directory.loginEnabled === false && (
+        <p className="muted">
+          请先在“登录与访问保护”中开启登录并设置账号密码，然后才能启用多用户。
+        </p>
+      )}
       <div className="user-account-list">
         {directory.users.map((u) => (
           <div key={u.id}>

@@ -1,4 +1,5 @@
 import { entityLabels, type Workspace } from '../../shared/model';
+import { plateDisplayName } from '../../shared/plate-names';
 import { biomeCatalog, symbolCatalog, generationDetailCatalog } from '../../shared/cartography';
 import { divisionLabels } from '../../shared/cartography';
 import { formatDistance, mapCoverageKm } from './map-scale';
@@ -245,7 +246,7 @@ export function exportMarkdown(data: Workspace, options: ExportOptions): string 
               );
             for (const plate of geo.plates)
               out.push(
-                `- 板块 **${render(plate.name)}**：${plate.kind === 'continental' ? '大陆板块' : '海洋板块'}；运动向量 (${plate.velocity.x.toFixed(2)}, ${plate.velocity.y.toFixed(2)})。`,
+                `- 板块 **${render(plateDisplayName(plate, geo.seed))}**：${plate.kind === 'continental' ? '大陆板块' : '海洋板块'}；运动向量 (${plate.velocity.x.toFixed(2)}, ${plate.velocity.y.toFixed(2)})。`,
               );
             const areaLabels = {
               continent: '大陆',

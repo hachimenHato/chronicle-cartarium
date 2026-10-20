@@ -17,15 +17,22 @@ export class Auth {
   constructor(
     private config: AppConfig,
     private credentials?: () => { username: string; hash: string } | undefined,
+    private loginRequired?: () => boolean,
   ) {}
   get required() {
-    return Boolean(this.credentials?.() || this.config.password);
+    return this.loginRequired
+      ? this.loginRequired()
+      : Boolean(this.credentials?.() || this.config.password);
   }
   clearSessions(userId?: string) {
     if (!userId) this.sessions.clear();
     else
       for (const [id, session] of this.sessions)
         if (session.userId === userId) this.sessions.delete(id);
+  }
+  clearSecondarySessions() {
+    for (const [id, session] of this.sessions)
+      if (session.userId !== 'owner') this.sessions.delete(id);
   }
   private signature(id: string) {
     return createHmac('sha256', this.config.sessionSecret).update(id).digest('base64url');

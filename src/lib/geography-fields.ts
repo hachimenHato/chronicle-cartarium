@@ -13,6 +13,7 @@ import type { RiverChannel } from './sketch-networks';
 import { generateGeographicClimate } from './geography-climate';
 import { mapSizePresets } from './map-scale';
 import { longitudeSpan } from '../../shared/world-extent';
+import { generatedPlateName } from '../../shared/plate-names';
 export { geographicTemperature } from './geography-climate';
 
 const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
@@ -107,7 +108,7 @@ export function createGeographicPlates(
       speed = 0.35 + random() * 0.65;
     plates.push({
       id,
-      name: `第${id + 1}板块`,
+      name: generatedPlateName(id, seed),
       center: { x: Math.round(center.x * 100) / 100, y: Math.round(center.y * 100) / 100 },
       velocity: {
         x: Math.round(Math.cos(angle) * speed * 1000) / 1000,

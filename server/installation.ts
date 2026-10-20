@@ -52,8 +52,10 @@ const accountSchema = z.object({
 export const installationSchema = settingsSchema
   .extend({
     storage: z.enum(['sqlite', 'mysql']),
-    username: accountSchema.shape.username,
-    password: accountSchema.shape.password,
+    loginEnabled: z.boolean().default(true),
+    multiUser: z.boolean().default(false),
+    username: accountSchema.shape.username.optional(),
+    password: accountSchema.shape.password.optional(),
     fillExample: z.boolean(),
     mysql: z
       .object({
@@ -75,18 +77,44 @@ export const installationSchema = settingsSchema
       .strict()
       .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.loginEnabled && (!value.username || !value.password))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['username'],
+        message: '开启登录需要设置用户名和密码。',
+      });
+    if (!value.loginEnabled && value.multiUser)
+      ctx.addIssue({ code: 'custom', path: ['multiUser'], message: '多用户模式需要开启登录。' });
+  });
+export const loginSettingsSchema = z.discriminatedUnion('enabled', [
+  accountSchema
+    .extend({ enabled: z.literal(true), currentPassword: z.string().max(1024).optional() })
+    .strict(),
+  z
+    .object({ enabled: z.literal(false), currentPassword: z.string().max(1024).optional() })
+    .strict(),
+]);
 export const savedInstallationSchema = z
   .object({
     version: z.literal(1),
     storage: z.enum(['sqlite', 'mysql']),
     databaseUrl: z.string().optional(),
-    username: accountSchema.shape.username,
-    passwordHash: z.string().regex(/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/),
+    loginEnabled: z.boolean().default(true),
+    username: accountSchema.shape.username.optional(),
+    passwordHash: z
+      .string()
+      .regex(/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/)
+      .optional(),
     sessionSecret: z.string().min(32),
     settings: settingsSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.loginEnabled && (!value.username || !value.passwordHash))
+      ctx.addIssue({ code: 'custom', path: ['username'], message: '登录配置缺少主管理员凭据。' });
+  });
 type Installation = z.infer<typeof savedInstallationSchema>;
 async function openMysql(databaseUrl: string) {
   const store = new MysqlStore(databaseUrl, createEmptyWorkspace);
@@ -115,9 +143,12 @@ export class InstallationManager implements WorkspaceStore {
     return !this.installed;
   }
   get credentials() {
-    return this.installed
+    return this.installed?.loginEnabled && this.installed.username && this.installed.passwordHash
       ? { username: this.installed.username, hash: this.installed.passwordHash }
       : undefined;
+  }
+  get loginEnabled() {
+    return this.installed?.loginEnabled ?? true;
   }
   get settings(): ApplicationSettings {
     return this.installed
@@ -188,11 +219,16 @@ export class InstallationManager implements WorkspaceStore {
     await rename(temporary, this.filename);
     this.installed = installation;
   }
-  async install(value: unknown) {
+  async install(
+    value: unknown,
+    initializeUsers?: (enabled: boolean) => Promise<() => Promise<void>>,
+  ) {
     const input = installationSchema.parse(value);
     return this.serial(async () => {
       if (this.installed) throw new ConflictError();
-      const passwordHash = await hash(input.password, 12);
+      if (input.multiUser && !initializeUsers)
+        throw new InstallationError('当前启动方式尚未准备多用户管理，请通过安装接口配置。');
+      const passwordHash = input.loginEnabled ? await hash(input.password!, 12) : undefined;
       let next = this.active;
       let databaseUrl: string | undefined;
       if (input.storage === 'sqlite' && next?.mode !== 'sqlite')
@@ -249,16 +285,23 @@ export class InstallationManager implements WorkspaceStore {
             target.revision,
           );
         }
-        await this.persist({
-          version: 1,
-          storage: input.storage,
-          databaseUrl:
-            databaseUrl || (input.storage === 'mysql' ? this.config.databaseUrl : undefined),
-          username: input.username,
-          passwordHash,
-          sessionSecret: this.config.sessionSecret,
-          settings: { title: input.title, theme: input.theme, access: input.access },
-        });
+        const rollbackUsers = await initializeUsers?.(input.multiUser);
+        try {
+          await this.persist({
+            version: 1,
+            storage: input.storage,
+            databaseUrl:
+              databaseUrl || (input.storage === 'mysql' ? this.config.databaseUrl : undefined),
+            loginEnabled: input.loginEnabled,
+            username: input.loginEnabled ? input.username : undefined,
+            passwordHash,
+            sessionSecret: this.config.sessionSecret,
+            settings: { title: input.title, theme: input.theme, access: input.access },
+          });
+        } catch (error) {
+          await rollbackUsers?.();
+          throw error;
+        }
       } catch (error) {
         if (next !== this.active) await next.close();
         throw error;
@@ -303,13 +346,52 @@ export class InstallationManager implements WorkspaceStore {
       return settings;
     });
   }
+  /** Shares the configuration queue with login changes so concurrent toggles cannot violate policy. */
+  configureSecurity<T>(operation: () => Promise<T>) {
+    return this.serial(operation);
+  }
+  async updateLogin(
+    value: unknown,
+    directory: () => { enabled: boolean; usernames: string[] },
+    authorize: () => void = () => undefined,
+  ) {
+    const input = loginSettingsSchema.parse(value);
+    return this.serial(async () => {
+      authorize();
+      if (!this.installed) throw new InstallationError('请先完成安装。');
+      const users = directory();
+      if (!input.enabled && users.enabled)
+        throw new InstallationError('多用户模式开启时不能关闭登录，请先关闭多用户模式。');
+      if (this.loginEnabled && !(await this.verifyOwnerPassword(input.currentPassword ?? '')))
+        throw new InstallationError('请填写主管理员当前密码以修改登录设置。', 401);
+      if (
+        input.enabled &&
+        users.usernames.some(
+          (name) => name.toLocaleLowerCase() === input.username.toLocaleLowerCase(),
+        )
+      )
+        throw new InstallationError('此登录名已被其他用户使用。');
+      await this.persist({
+        ...this.installed,
+        loginEnabled: input.enabled,
+        ...(input.enabled
+          ? { username: input.username, passwordHash: await hash(input.password, 12) }
+          : {}),
+      });
+      return { loginEnabled: this.loginEnabled, username: this.credentials?.username };
+    });
+  }
   async changePassword(value: unknown) {
     const input = z
       .object({ currentPassword: z.string().max(1024), password: accountSchema.shape.password })
       .strict()
       .parse(value);
     return this.serial(async () => {
-      if (!this.installed || !(await compare(input.currentPassword, this.installed.passwordHash)))
+      if (
+        !this.installed ||
+        !this.credentials ||
+        !(await compare(input.currentPassword, this.credentials.hash))
+      )
         throw new InstallationError('当前密码不正确。', 401);
       await this.persist({ ...this.installed, passwordHash: await hash(input.password, 12) });
     });
@@ -398,10 +480,11 @@ export class InstallationManager implements WorkspaceStore {
     return verifyMysqlRecovery(path.join(directory, info.file), url);
   }
   async verifyOwnerPassword(password: string) {
+    if (this.installed && !this.loginEnabled) return password === '';
     return Boolean(
-      this.installed &&
+      this.credentials &&
       Buffer.byteLength(password, 'utf8') <= 72 &&
-      (await compare(password, this.installed.passwordHash)),
+      (await compare(password, this.credentials.hash)),
     );
   }
   async backupPrivate(filename: string) {

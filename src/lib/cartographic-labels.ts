@@ -3,6 +3,7 @@ import type { GeneratedGeography, GeographicCell } from '../../shared/geography'
 import type { GeneratedMapSnapshot } from '../../shared/generated-map';
 import type { GeographicLayer } from '../../shared/map-layers';
 import { pointInPolygon, smoothPath } from './terrain';
+import { plateDisplayName } from '../../shared/plate-names';
 
 export interface LabelObstacle {
   x: number;
@@ -275,7 +276,7 @@ export function layoutCartographicLabels({
       if (cells.length)
         requests.push({
           id: `plate-${p.id}`,
-          name: p.name,
+          name: plateDisplayName(p, g.seed),
           kind: 'plate',
           cells,
           fontSize: 17 * unit,

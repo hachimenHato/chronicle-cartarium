@@ -47,6 +47,17 @@ for (const item of [...directories, ...files]) {
   }
 }
 await mkdir(path.join(destination, 'docs'));
+try {
+  await cp(path.join(root, 'docs/screenshots'), path.join(destination, 'docs/screenshots'), {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+    filter: (filename) =>
+      filename === path.join(root, 'docs/screenshots') || /\.(png|webp)$/i.test(filename),
+  });
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
 for (const name of await readdir(path.join(root, 'docs'))) {
   if (
     !name.endsWith('.md') ||

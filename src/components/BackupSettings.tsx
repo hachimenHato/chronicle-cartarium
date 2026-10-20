@@ -6,7 +6,15 @@ import { ProgramUpdatePanel } from './ProgramUpdatePanel';
 import { APPLICATION_VERSION } from '../../shared/application';
 import { PRIVATE_BACKUP_EXTENSION } from '../../shared/branding';
 
-export function BackupSettings({ revision, canBackup }: { revision: number; canBackup: boolean }) {
+export function BackupSettings({
+  revision,
+  canBackup,
+  loginEnabled = true,
+}: {
+  revision: number;
+  canBackup: boolean;
+  loginEnabled?: boolean;
+}) {
   const [status, setStatus] = useState<BackupStatus>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -137,18 +145,22 @@ export function BackupSettings({ revision, canBackup }: { revision: number; canB
           <p>
             此私有备份含账号配置和密码哈希，下载后请妥善保管。文件未加密，请存放到私有或加密磁盘。
           </p>
-          <label className="field">
-            主管理员当前密码
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </label>
+          {loginEnabled ? (
+            <label className="field">
+              主管理员当前密码
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+          ) : (
+            <p className="muted">当前为免登录模式，无需密码。请确认仅将此备份保存在私有位置。</p>
+          )}
           <div className="button-row">
-            <button className="btn primary" disabled={working || !password}>
+            <button className="btn primary" disabled={working || (loginEnabled && !password)}>
               确认下载私有备份
             </button>
             <button

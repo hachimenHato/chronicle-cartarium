@@ -156,7 +156,7 @@ const packages = await packager({
   electronVersion: appPackage.devDependencies.electron,
   electronZipDir,
   appVersion: appPackage.version,
-  buildVersion: '0.2.0.16',
+  buildVersion: `${appPackage.version.split('-')[0]}.${/-(?:beta|alpha|rc)\.(\d+)$/.exec(appPackage.version)?.[1] ?? 0}`,
   icon,
   asar: true,
   prune: false,

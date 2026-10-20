@@ -18,6 +18,7 @@ import { DivisionQuickCreate } from './DivisionQuickCreate';
 import { useAccess } from './AccessContext';
 import './GeographyPanel.css';
 import { GlobeExtentPicker } from './GlobeExtentPicker';
+import { plateDisplayName } from '../../shared/plate-names';
 
 export type GeographyTool = 'pan' | 'assign' | MilitaryLineKind;
 export function GeographyPanel({
@@ -172,6 +173,37 @@ export function GeographyPanel({
       )}
       {g && (
         <>
+          {section === 'divisions' && (
+            <details>
+              <summary>板块名称 · {g.plates.length}</summary>
+              <p className="atlas-subtle">名称显示于板块图层和图例。修改名称不会重新生成地形。</p>
+              {g.plates.map((plate) => (
+                <label className="atlas-label" key={plate.id}>
+                  {plate.kind === 'continental' ? '大陆板块' : '海洋板块'}
+                  <input
+                    className="field"
+                    aria-label={`板块名称 ${plate.id + 1}`}
+                    key={`${plate.id}-${plate.name}`}
+                    disabled={!writable || pending}
+                    maxLength={120}
+                    defaultValue={plateDisplayName(plate, g.seed)}
+                    onBlur={(event) => {
+                      const name = event.target.value.trim();
+                      if (!name) {
+                        event.target.value = plateDisplayName(plate, g.seed);
+                        return;
+                      }
+                      if (name !== plateDisplayName(plate, g.seed))
+                        onChange({
+                          ...g,
+                          plates: g.plates.map((p) => (p.id === plate.id ? { ...p, name } : p)),
+                        });
+                    }}
+                  />
+                </label>
+              ))}
+            </details>
+          )}
           {writable && section === 'divisions' && (
             <details open className="geographic-territory-editor">
               <summary>按小区域修改疆域</summary>

@@ -87,7 +87,11 @@ export async function createApp(
   app.use(cookieParser());
   app.use(express.json({ limit: '16mb' }));
   const management = store instanceof InstallationManager ? store : undefined;
-  const auth = new Auth(config, management ? () => management.credentials : undefined);
+  const auth = new Auth(
+    config,
+    management ? () => management.credentials : undefined,
+    management ? () => management.loginEnabled : undefined,
+  );
   const users = management
     ? await UserDirectoryStore.open(
         path.join(config.dataDir, 'users.json'),
@@ -95,6 +99,8 @@ export async function createApp(
         management.maintenance,
       )
     : undefined;
+  if (management && !management.setupRequired && users?.enabled && !management.loginEnabled)
+    throw new InstallationError('配置不一致：多用户模式必须启用登录，请恢复完整安装配置。');
   const fullBackups = management && users ? new FullBackupService(management, users) : undefined;
   const updates = management ? new ProgramUpdateService(config) : undefined;
   const actor = (req: express.Request): UserAccount | undefined => {
@@ -221,8 +227,10 @@ export async function createApp(
             ? '安装授权码不正确。'
             : '请在服务器本机或通过 SSH 本地隧道打开安装指引。',
         });
-      const result = await management.install(req.body);
-      auth.login(res);
+      const result = await management.install(req.body, (enabled) =>
+        users!.initializeForInstallation(enabled),
+      );
+      if (management.loginEnabled) auth.login(res);
       res.status(201).json(result);
       onInstalled?.();
     },
@@ -424,7 +432,7 @@ export async function createApp(
       async (req, res) => {
         requireOwner(actor(req)!);
         const input = z
-          .object({ password: z.string().min(1).max(1024) })
+          .object({ password: z.string().max(1024) })
           .strict()
           .parse(req.body);
         if (!(await management.verifyOwnerPassword(input.password)))
@@ -449,6 +457,8 @@ export async function createApp(
       return res.json({
         settings: management.settings,
         username: management.credentials?.username,
+        loginEnabled: management.loginEnabled,
+        multiUser: users?.enabled ?? false,
         storage: management.mode,
         version: APPLICATION_VERSION,
         node: process.versions.node,
@@ -458,6 +468,28 @@ export async function createApp(
     app.put('/api/admin/settings', async (req, res) => {
       requireOwner(actor(req)!);
       res.json(await management.updateSettings(req.body));
+    });
+    app.put('/api/admin/login', async (req, res) => {
+      requireOwner(actor(req)!);
+      const result = await management.updateLogin(
+        req.body,
+        () => ({
+          enabled: users!.enabled,
+          usernames: users!
+            .publicDirectory()
+            .users.filter((u) => u.id !== 'owner')
+            .map((u) => u.username),
+        }),
+        () => {
+          const current = actor(req);
+          if (!current) throw new PermissionError('登录状态已改变，请重新加载。');
+          requireOwner(current);
+        },
+      );
+      auth.clearSessions();
+      if (management.loginEnabled) auth.login(res);
+      else auth.logout(req, res);
+      res.json(result);
     });
     app.post('/api/admin/password', async (req, res) => {
       requireOwner(actor(req)!);
@@ -493,7 +525,15 @@ export async function createApp(
         .object({ enabled: z.boolean(), revision: z.number().int().nonnegative() })
         .strict()
         .parse(req.body);
-      res.json(await users!.setEnabled(actor(req)!, input.enabled, input.revision));
+      const principal = actor(req)!;
+      requireOwner(principal);
+      const result = await management.configureSecurity(async () => {
+        const current = actor(req);
+        if (!current) throw new PermissionError('登录状态已改变，请重新加载。');
+        return users!.setEnabled(current, input.enabled, input.revision);
+      });
+      auth.clearSecondarySessions();
+      res.json(result);
     });
     app.put('/api/admin/users', async (req, res) => {
       requireAdministrator(actor(req)!);
@@ -508,7 +548,11 @@ export async function createApp(
           ...data.variables,
         ].map((r) => r.id),
       );
-      const result = await users!.write(actor(req)!, req.body, ids);
+      const result = await management.configureSecurity(async () => {
+        const current = actor(req);
+        if (!current) throw new PermissionError('登录状态已改变，请重新加载。');
+        return users!.write(current, req.body, ids);
+      });
       if (req.body.id && (req.body.password || req.body.disabled)) auth.clearSessions(req.body.id);
       res.json(result);
     });
