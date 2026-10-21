@@ -239,10 +239,44 @@ test('real worker generation displays only a centered temporary progress overlay
   await openAtlas(page);
   const overlay = page.locator('.atlas-generation-overlay');
   await expect(overlay).toBeVisible();
-  const stage = await page.locator('.atlas-stage-shell').boundingBox(),
-    card = await overlay.locator('div').boundingBox();
-  expect(Math.abs(card!.x + card!.width / 2 - (stage!.x + stage!.width / 2))).toBeLessThan(3);
-  expect(Math.abs(card!.y + card!.height / 2 - (stage!.y + stage!.height / 2))).toBeLessThan(3);
+  const bounds = await page.locator('.atlas-stage-shell').evaluate((stage) => {
+    const rect = (selector: string) => {
+      const box = stage.querySelector(selector)!.getBoundingClientRect();
+      return {
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        right: box.right,
+        bottom: box.bottom,
+      };
+    };
+    return {
+      frame: rect('.atlas-canvas-frame'),
+      overlay: rect('.atlas-generation-overlay'),
+      card: rect('.atlas-generation-overlay > div'),
+      tools: rect('.atlas-tools'),
+      title: rect('.atlas-map-title'),
+      zoom: rect('.atlas-zoom'),
+      layers: rect('.atlas-layers'),
+      footer: rect('.atlas-bottom-bar'),
+    };
+  });
+  // The drawing frame reserves separate margins for the tool rail, header and
+  // footer. Progress belongs at the center of that usable map, not the stage.
+  expect(
+    Math.abs(bounds.card.x + bounds.card.width / 2 - (bounds.frame.x + bounds.frame.width / 2)),
+  ).toBeLessThan(3);
+  expect(
+    Math.abs(bounds.card.y + bounds.card.height / 2 - (bounds.frame.y + bounds.frame.height / 2)),
+  ).toBeLessThan(3);
+  for (const edge of ['x', 'y', 'right', 'bottom'] as const)
+    expect(Math.abs(bounds.overlay[edge] - bounds.frame[edge])).toBeLessThan(3);
+  expect(bounds.overlay.x).toBeGreaterThanOrEqual(bounds.tools.right);
+  expect(bounds.overlay.y).toBeGreaterThanOrEqual(
+    Math.max(bounds.title.bottom, bounds.zoom.bottom, bounds.layers.bottom),
+  );
+  expect(bounds.overlay.bottom).toBeLessThanOrEqual(bounds.footer.y);
   await expect(page.locator('.atlas-generator-status')).toHaveCount(0);
   await page.screenshot({ path: '.runtime/map-centered-generation.png' });
   await expect(page.locator('.atlas-canvas [data-terrain-composite]')).toHaveAttribute(

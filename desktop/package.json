@@ -1,6 +1,6 @@
 {
   "name": "chronicle-cartarium-desktop",
-  "version": "0.2.0-beta.17",
+  "version": "0.2.0-beta.18",
   "private": true,
   "license": "0BSD",
   "main": "main.cjs",

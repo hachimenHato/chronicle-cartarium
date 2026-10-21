@@ -1,8 +1,14 @@
 # 架构与数据约定
 
+## 可丢弃的完整底图显示缓存（2026-10-21本地补丁）
+
+Atlas将地形与纸面集中在data-map-cache-source组，useMapRasterCache只在源图改变时准备独立HTML Canvas；地名、军线、笔画、标记和编辑覆盖继续由SVG绘制。原底图仅通过外层CSS隐藏颜色，保留命中；导出仍克隆原SVG，缓存不进入领域模型与存储。源图变化立即恢复原矢量，异步字体／上传图片／解码受版本号约束；手势中不替换显示，切图或卸载释放资源。
+
+map-raster-cache纯函数规划完整绘制边界、最高400%与DPR像素、xMidYMid meet矩阵。Canvas与SVG共用相机surface，避免把临时getScreenCTM再套一次。边界包含几何、描边和模糊外扩；超过4000万像素／单边16384或无法解码时回退原SVG，不降低生成精度。窗口、DPR、全屏和字体变化失效。准备耗时、内存限制、纹理采样差异及实测见[地图性能说明](map-performance.md)。
+
 ## 连续缩放相机（beta.16）
 
-useMapPanCamera统一维护已渲染base、最新next及未确认commits。平移／缩放只改变同一HTML surface的translate3d／scale；停止120ms或落笔前finish才更新原SVG viewport。layout阶段确认提交后重base，若已有后续输入则重新计算剩余CSS矩阵，不清掉新手势。replace统一处理重置、定位和地图切换等程序视图，取消旧RAF／idle；尺寸和全屏变化结束当前手势。
+useMapPanCamera统一维护已渲染base、最新next及未确认commits。平移／缩放只改变同一HTML surface的translate3d／scale；停止400ms或落笔前finish才更新原SVG viewport。layout阶段确认提交后重base，若已有后续输入则重新计算剩余CSS矩阵，不清掉新手势。replace统一处理重置、定位和地图切换等程序视图，取消旧RAF／idle；尺寸和全屏变化结束当前手势。
 
 map-camera中的纯函数按M·Vnext·Vbase⁻¹·M⁻¹得到CSS变换；M包含viewBox留白与屏幕到本地CSS比例。落笔前同步呈现最后CSS，getScreenCTM读取真实显示坐标；数据仍以地图坐标保存。百分比独立span ref只在文本改变时更新，不驱动Atlas每帧重渲染；CSS使用原始字符串缓存，不比较浏览器规范化后的style字符串。平移首sample同步呈现，后续采样按RAF合并，不变变换不重复写。
 

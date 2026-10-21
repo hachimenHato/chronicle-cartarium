@@ -19,6 +19,7 @@ interface CameraPresentation {
   next: MapCameraView;
   root: MapCameraMatrix;
   inverseScreen: DOMMatrix;
+  screenOrigin: { left: number; top: number };
   commits: MapCameraView[];
   css?: string;
   pan?: { client: PointerPosition; view: MapCameraView; presented: boolean };
@@ -97,6 +98,7 @@ export function useMapPanCamera(
     // getScreenCTM includes preserveAspectRatio's horizontal/vertical margins.
     // Convert its screen-pixel result to the HTML surface's own CSS pixels.
     const size = getComputedStyle(element);
+    const origin = frame.current?.getBoundingClientRect() ?? bounds;
     const cssX = parseFloat(size.width) / bounds.width;
     const cssY = parseFloat(size.height) / bounds.height;
     const active: CameraPresentation = {
@@ -111,6 +113,7 @@ export function useMapPanCamera(
         f: (matrix.f - bounds.top) * cssY,
       },
       inverseScreen: matrix.inverse(),
+      screenOrigin: { left: origin.left, top: origin.top },
       commits: [],
     };
     presentation.current = active;
@@ -141,7 +144,10 @@ export function useMapPanCamera(
     idle.current = setTimeout(() => {
       idle.current = undefined;
       finish();
-    }, 120);
+      // A physical wheel often pauses 180–240 ms between detents. Keep those
+      // inputs on the same compositor layer; tools still call finish immediately
+      // before reading precise SVG coordinates.
+    }, 400);
   }
   function zoom(active: CameraPresentation, nextZoom: number, anchor: MapCameraPoint) {
     if (active.pan) {
@@ -149,7 +155,15 @@ export function useMapPanCamera(
       surface.current?.removeAttribute('data-map-panning');
       interrupt.current();
     }
-    active.next = zoomMapCamera(active.next, nextZoom, anchor);
+    const next = zoomMapCamera(active.next, nextZoom, anchor);
+    if (sameMapCameraView(next, active.next)) {
+      // At a zoom limit there is no new work. A preceding pan/zoom must still
+      // settle, but repeated wheel input must not keep rebuilding the map.
+      if (sameMapCameraView(active.next, active.base) && !active.commits.length) clear();
+      else if (idle.current === undefined) finishWhenIdle();
+      return;
+    }
+    active.next = next;
     requestDraw(active);
     finishWhenIdle();
   }
@@ -195,6 +209,20 @@ export function useMapPanCamera(
       finish();
       interrupt.current();
     };
+    const scrolled = () => {
+      const active = presentation.current;
+      if (!active || !frame.current) return;
+      const origin = frame.current.getBoundingClientRect();
+      const dx = origin.left - active.screenOrigin.left;
+      const dy = origin.top - active.screenOrigin.top;
+      if (!dx && !dy) return;
+      // Scrolling translates the screen origin, not the local SVG geometry.
+      // Correct it before finishing: another wheel may arrive in the same
+      // frame, before React acknowledges that final vector view.
+      active.inverseScreen = active.inverseScreen.translate(-dx, -dy);
+      active.screenOrigin = { left: origin.left, top: origin.top };
+      changed();
+    };
     let size = frame.current ? [frame.current.clientWidth, frame.current.clientHeight] : [0, 0];
     const observer = new ResizeObserver(() => {
       if (!frame.current) return;
@@ -204,10 +232,12 @@ export function useMapPanCamera(
     });
     if (frame.current) observer.observe(frame.current);
     window.addEventListener('resize', changed);
+    window.addEventListener('scroll', scrolled, true);
     document.addEventListener('fullscreenchange', changed);
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', changed);
+      window.removeEventListener('scroll', scrolled, true);
       document.removeEventListener('fullscreenchange', changed);
     };
   }, [mapId]);

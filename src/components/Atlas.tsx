@@ -91,6 +91,7 @@ import { climateLegendItems, terrainLayerColors } from '../lib/thematic-colors';
 import { featureHidden, hiddenFeatureObjects } from '../../shared/map-features';
 import { useFrameState } from '../lib/useFrameState';
 import { useMapPanCamera } from '../lib/useMapPanCamera';
+import { useMapRasterCache } from '../lib/useMapRasterCache';
 import './AtlasLayout.css';
 
 const mapKinds = { world: '世界地图', region: '区域地图', town: '城镇地图' };
@@ -551,10 +552,10 @@ export default function Atlas({
   onChangeRef.current = onChange;
   const history = useRef<Record<string, { past: AtlasMap[]; future: AtlasMap[] }>>({});
   const interaction = useRef<
+    | { kind: 'pan'; fallback?: { start: Point; view: typeof view } }
     | {
-        kind: 'pan' | 'stroke' | 'pin' | 'erase';
+        kind: 'stroke' | 'pin' | 'erase';
         start: Point;
-        view?: typeof view;
         stroke?: MapStroke;
         pinId?: string;
         point?: Point;
@@ -569,6 +570,7 @@ export default function Atlas({
     if (geographyGesture.current?.selection) geographyGesture.current = undefined;
   });
   const setView = panCamera.replace;
+  const rasterCanvas = useMapRasterCache(svgRef, panCamera.surface, view, map?.id);
   const writable = Boolean(map && access.update('maps', map));
   const geography = geographyDraft ?? map?.editor?.generated?.geography;
   const labelObstacles = useMemo(
@@ -1148,11 +1150,29 @@ export default function Atlas({
     if (strokes.length !== current.strokes.length) update({ strokes }, false);
   }
   function beginPan(event: ReactPointerEvent<SVGSVGElement>) {
-    interaction.current = { kind: 'pan', start: localPoint(event, true), view };
-    panCamera.begin(event);
+    // Ordinary panning only needs client deltas. Read SVG coordinates solely
+    // for the fallback when no camera matrix is available.
+    interaction.current = panCamera.begin(event)
+      ? { kind: 'pan' }
+      : { kind: 'pan', fallback: { start: localPoint(event, true), view: latestView() } };
   }
   function pointerDown(event: ReactPointerEvent<SVGSVGElement>) {
     if (!map || event.button !== 0) return;
+    // Keep an in-flight wheel presentation when a pan begins. Committing it or
+    // querying inactive editing tools first forces expensive SVG layout.
+    // Selection still follows the normal hit-testing path below.
+    const directPan =
+      fullscreen ||
+      (geographyTab && geographyTool === 'pan') ||
+      (!geographyTab && divisionTab && divisionStudio.tool === 'pan') ||
+      (!geographyTab && !divisionTab && tool === 'pan');
+    if (directPan) {
+      svgRef.current?.setPointerCapture(event.pointerId);
+      if (!fullscreen && !geographyTab && !divisionTab) setSelectedPinId(undefined);
+      beginPan(event);
+      if (!fullscreen && !geographyTab && !divisionTab) studio.setNotice('');
+      return;
+    }
     panCamera.finish();
     const point = bounded(localPoint(event));
     svgRef.current?.setPointerCapture(event.pointerId);
@@ -1345,12 +1365,14 @@ export default function Atlas({
     if (!active || !map) return;
     if (active.kind === 'pan') {
       if (panCamera.move(event)) return;
-      const point = localPoint(event, true);
-      setView({
-        ...active.view!,
-        x: active.view!.x + point.x - active.start.x,
-        y: active.view!.y + point.y - active.start.y,
-      });
+      if (active.fallback) {
+        const point = localPoint(event, true);
+        setView({
+          ...active.fallback.view,
+          x: active.fallback.view.x + point.x - active.fallback.start.x,
+          y: active.fallback.view.y + point.y - active.fallback.start.y,
+        });
+      }
     }
     if (active.kind === 'pin') {
       const point = localPoint(event);
@@ -1978,6 +2000,7 @@ export default function Atlas({
             style={{ backgroundColor: canvasBackground }}
           >
             <div ref={panCamera.surface} className="atlas-pan-surface">
+              <canvas ref={rasterCanvas} className="atlas-terrain-cache" aria-hidden="true" />
               <svg
                 ref={svgRef}
                 className={`atlas-canvas atlas-tool-${tool} ${divisionTab ? `division-tool-${divisionStudio.tool}` : ''} ${geographyTab && geographyTool !== 'pan' ? 'geography-drawing' : ''}`}
@@ -2015,37 +2038,39 @@ export default function Atlas({
                   data-map-viewport="true"
                   transform={`translate(${view.x} ${view.y}) scale(${view.zoom})`}
                 >
-                  {showTerrain ? (
-                    <g>
-                      {studio.editor.baseVisible && !studio.sourcePreview ? (
-                        <LegacyTerrainArtwork map={map} />
-                      ) : (
-                        <rect width={map.width} height={map.height} fill={parchmentSea} />
-                      )}
-                      <EditorArtwork
-                        map={studio.previewMap!}
-                        interactive
-                        objectPreview={studio.draftObject}
-                        regionPreview={studio.draftRegion}
-                        elevationPreview={!!studio.draftElevation}
-                        onPending={setTerrainPending}
-                        onError={setTerrainError}
-                        sourcePreview={studio.sourcePreview}
-                        terrainView={displayElevation ? 'elevation' : 'atlas'}
-                        onElevation={setElevation}
-                        onCoastlines={setGeneratedCoasts}
-                        onLegend={setGeneratedLegend}
-                        onSettlements={setGeneratedSettlements}
-                        onSnapshot={acceptGenerated}
-                        renderUnderlay={renderUnderlay}
-                      />
-                    </g>
-                  ) : (
-                    <rect width={map.width} height={map.height} fill={parchmentPaper} />
-                  )}
-                  {!studio.sourcePreview && !displayElevation && (
-                    <MapPaper width={map.width} height={map.height} />
-                  )}
+                  <g data-map-cache-source="true">
+                    {showTerrain ? (
+                      <g>
+                        {studio.editor.baseVisible && !studio.sourcePreview ? (
+                          <LegacyTerrainArtwork map={map} />
+                        ) : (
+                          <rect width={map.width} height={map.height} fill={parchmentSea} />
+                        )}
+                        <EditorArtwork
+                          map={studio.previewMap!}
+                          interactive
+                          objectPreview={studio.draftObject}
+                          regionPreview={studio.draftRegion}
+                          elevationPreview={!!studio.draftElevation}
+                          onPending={setTerrainPending}
+                          onError={setTerrainError}
+                          sourcePreview={studio.sourcePreview}
+                          terrainView={displayElevation ? 'elevation' : 'atlas'}
+                          onElevation={setElevation}
+                          onCoastlines={setGeneratedCoasts}
+                          onLegend={setGeneratedLegend}
+                          onSettlements={setGeneratedSettlements}
+                          onSnapshot={acceptGenerated}
+                          renderUnderlay={renderUnderlay}
+                        />
+                      </g>
+                    ) : (
+                      <rect width={map.width} height={map.height} fill={parchmentPaper} />
+                    )}
+                    {!studio.sourcePreview && !displayElevation && (
+                      <MapPaper width={map.width} height={map.height} />
+                    )}
+                  </g>
                   {!studio.sourcePreview && !displayElevation && (
                     <GeographicArtwork
                       phase="overlay"

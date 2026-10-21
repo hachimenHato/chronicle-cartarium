@@ -758,3 +758,388 @@ test('tools immediately following pending zoom retain map coordinates and SVG ex
     ),
   ).toBe(0);
 });
+
+test('ordinary pan starts without reading world coordinates or committing the SVG viewport', async ({
+  page,
+  request,
+}) => {
+  const before = await workspace(request);
+  const viewport = page.locator('[data-map-viewport="true"]');
+  const surface = page.locator('.atlas-pan-surface');
+  await page.getByRole('button', { name: '平移地图', exact: true }).click();
+  const original = await viewport.getAttribute('transform');
+  const artwork = await viewport.innerHTML();
+  const start = await screenPoint(page, 650, 400);
+  await page.mouse.move(start.x, start.y);
+  // Count only the actual press and drag. The test's own screenPoint helper and
+  // ordinary hover may legitimately ask for world coordinates before the press.
+  await viewport.evaluate((node) => {
+    const group = node as SVGGElement;
+    const original = group.getScreenCTM;
+    const probe = {
+      reads: 0,
+      commits: 0,
+      stop() {
+        group.getScreenCTM = original;
+        observer.disconnect();
+      },
+    };
+    const observer = new MutationObserver((records) => {
+      probe.commits += records.filter((record) => record.attributeName === 'transform').length;
+    });
+    observer.observe(group, { attributes: true, attributeFilter: ['transform'] });
+    group.getScreenCTM = function () {
+      probe.reads++;
+      return original.call(this);
+    };
+    Object.assign(group, { __panStartProbe: probe });
+  });
+  await page.mouse.down();
+  const pressed = await viewport.evaluate(async (node) => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const probe = (
+      node as SVGGElement & {
+        __panStartProbe: { reads: number; commits: number };
+      }
+    ).__panStartProbe;
+    return { reads: probe.reads, commits: probe.commits, svg: node.getAttribute('transform') };
+  });
+  expect(pressed).toEqual({ reads: 0, commits: 0, svg: original });
+  await expect(page.locator('.atlas-canvas')).toHaveCSS('cursor', 'grabbing');
+  await expect(viewport).toHaveCSS('cursor', 'grab');
+  await expect(surface).toHaveAttribute('data-map-panning', 'true');
+  await page.mouse.move(start.x + 65, start.y + 25, { steps: 4 });
+  const dragged = await viewport.evaluate((node) => {
+    const probe = (
+      node as SVGGElement & {
+        __panStartProbe: { reads: number; commits: number; stop: () => void };
+      }
+    ).__panStartProbe;
+    const result = {
+      reads: probe.reads,
+      commits: probe.commits,
+      svg: node.getAttribute('transform'),
+    };
+    probe.stop();
+    return result;
+  });
+  expect(dragged).toEqual({ reads: 0, commits: 0, svg: original });
+  await page.mouse.up();
+  await expect(surface).not.toHaveAttribute('data-map-transforming');
+  await expect(viewport).not.toHaveAttribute('transform', original!);
+  expect(await viewport.innerHTML()).toBe(artwork);
+  await page.waitForTimeout(850);
+  await unchangedInteraction(page, request, before);
+});
+
+test('native wheel detents separated by 180 and 240 milliseconds share one final SVG commit', async ({
+  page,
+  request,
+}) => {
+  const before = await workspace(request);
+  const viewport = page.locator('[data-map-viewport="true"]');
+  const surface = page.locator('.atlas-pan-surface');
+  const original = await viewport.getAttribute('transform');
+  const artwork = await viewport.innerHTML();
+  const anchor = await screenPoint(page, 500, 320);
+  await page.mouse.move(Math.round(anchor.x), Math.round(anchor.y));
+  await viewport.evaluate((node) => {
+    const probe = { commits: 0, observer: undefined as MutationObserver | undefined };
+    probe.observer = new MutationObserver((records) => {
+      probe.commits += records.filter((record) => record.attributeName === 'transform').length;
+    });
+    probe.observer.observe(node, { attributes: true, attributeFilter: ['transform'] });
+    Object.assign(node, { __detentProbe: probe });
+  });
+  const labels = ['110%', '121%', '133%', '146%'];
+  const intervals = [180, 240, 180];
+  for (let index = 0; index < labels.length; index++) {
+    if (index) await page.waitForTimeout(intervals[index - 1]);
+    await page.mouse.wheel(0, -100);
+    await expect(page.locator('.atlas-zoom > span')).toHaveText(labels[index]);
+    expect(await viewport.getAttribute('transform')).toBe(original);
+    expect(
+      await viewport.evaluate(
+        (node) =>
+          (node as SVGGElement & { __detentProbe: { commits: number } }).__detentProbe.commits,
+      ),
+    ).toBe(0);
+    await expect(surface).toHaveAttribute('data-map-transforming', 'true');
+  }
+  await expect(surface).not.toHaveAttribute('data-map-transforming');
+  await expect(surface).not.toHaveAttribute('style', /transform/);
+  await expect(viewport).not.toHaveAttribute('transform', original!);
+  const commits = await viewport.evaluate((node) => {
+    const probe = (
+      node as SVGGElement & {
+        __detentProbe: { commits: number; observer: MutationObserver };
+      }
+    ).__detentProbe;
+    probe.observer.disconnect();
+    return probe.commits;
+  });
+  expect(commits).toBe(1);
+  expect(await viewport.innerHTML()).toBe(artwork);
+  await page.waitForTimeout(850);
+  await unchangedInteraction(page, request, before);
+});
+
+test('a pan started during pending zoom preserves its screen delta and later road coordinates', async ({
+  page,
+  request,
+}) => {
+  const before = await workspace(request);
+  const generated = before.data.maps[0].editor!.generated;
+  const viewport = page.locator('[data-map-viewport="true"]');
+  const surface = page.locator('.atlas-pan-surface');
+  await page.getByRole('button', { name: '平移地图', exact: true }).click();
+  // Keep a native pointer active for the same-frame capture sequence, starting
+  // outside the drawing surface so no earlier gesture can affect the result.
+  await page.mouse.move(20, 20);
+  await page.mouse.down();
+  const result = await page.locator('.atlas-canvas').evaluate(async (node) => {
+    const group = node.querySelector<SVGGElement>('[data-map-viewport]')!;
+    const original = group.getAttribute('transform');
+    const anchor = new DOMPoint(500, 320).matrixTransform(group.getScreenCTM()!);
+    node.dispatchEvent(
+      new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: anchor.x,
+        clientY: anchor.y,
+        deltaY: -100,
+      }),
+    );
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const matrix = group.getScreenCTM()!;
+    const pinBefore = new DOMPoint(300, 240).matrixTransform(matrix);
+    const start = new DOMPoint(650, 400).matrixTransform(matrix);
+    const emit = (type: string, dx: number, dy: number) =>
+      node.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: 1,
+          button: 0,
+          buttons: type === 'pointerup' ? 0 : 1,
+          clientX: start.x + dx,
+          clientY: start.y + dy,
+        }),
+      );
+    const pending = node.parentElement!.getAttribute('data-map-transforming');
+    emit('pointerdown', 0, 0);
+    const atPress = group.getAttribute('transform');
+    emit('pointermove', 65, 25);
+    const pinDuring = new DOMPoint(300, 240).matrixTransform(group.getScreenCTM()!);
+    emit('pointerup', 65, 25);
+    return {
+      original,
+      atPress,
+      pending,
+      delta: { x: pinDuring.x - pinBefore.x, y: pinDuring.y - pinBefore.y },
+      end: { x: start.x + 65, y: start.y + 25 },
+    };
+  });
+  await page.mouse.move(result.end.x, result.end.y);
+  await page.mouse.up();
+  expect(result.pending).toBe('true');
+  expect(result.atPress).toBe(result.original);
+  expect(result.delta.x).toBeCloseTo(65, 1);
+  expect(result.delta.y).toBeCloseTo(25, 1);
+  await expect(page.locator('.atlas-zoom > span')).toHaveText('110%');
+  await expect(surface).not.toHaveAttribute('data-map-transforming');
+  const panned = await workspace(request);
+  expect(panned.revision).toBe(before.revision);
+  expect(panned.data.maps).toEqual(before.data.maps);
+  expect(workspaceWrites.get(page)).toBe(0);
+
+  await page.getByRole('button', { name: '绘制道路', exact: true }).click();
+  const points = [
+    { x: 200, y: 430 },
+    { x: 350, y: 450 },
+    { x: 480, y: 470 },
+  ];
+  const roadStart = await screenPoint(page, points[0].x, points[0].y);
+  await page.mouse.move(roadStart.x, roadStart.y);
+  await page.mouse.down();
+  await releaseInOneFrame(
+    page,
+    await screenPoint(page, points[1].x, points[1].y),
+    await screenPoint(page, points[2].x, points[2].y),
+  );
+  await expect
+    .poll(
+      async () =>
+        (await workspace(request)).data.maps[0].strokes[0]?.points.map((point) => [
+          Math.round(point.x),
+          Math.round(point.y),
+        ]),
+      { timeout: 30000 },
+    )
+    .toEqual(points.map((point) => [point.x, point.y]));
+  const saved = await workspace(request);
+  expect(saved.data.maps[0].editor!.generated).toEqual(generated);
+  expect(saved.data.maps[0].pins).toEqual(before.data.maps[0].pins);
+  expect(saved.data.maps[0].strokes).toHaveLength(1);
+  expect(workspaceWrites.get(page)).toBe(1);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __interactionJobs: number }).__interactionJobs,
+    ),
+  ).toBe(0);
+  expect(await viewport.getAttribute('transform')).not.toBe(result.original);
+});
+
+test('a new wheel gesture after page scrolling keeps the actual cursor anchor fixed', async ({
+  page,
+  request,
+}) => {
+  const before = await workspace(request);
+  const viewport = page.locator('[data-map-viewport="true"]');
+  const surface = page.locator('.atlas-pan-surface');
+  const artwork = await viewport.innerHTML();
+  await page.evaluate(async () => {
+    document.body.style.paddingBottom = '800px';
+    window.scrollTo(0, 0);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
+  const firstAnchor = await screenPoint(page, 500, 320);
+  await page.mouse.move(Math.round(firstAnchor.x), Math.round(firstAnchor.y));
+  await page.mouse.wheel(0, -100);
+  await expect(page.locator('.atlas-zoom > span')).toHaveText('110%');
+  await expect(surface).not.toHaveAttribute('data-map-transforming');
+  const beforeScroll = await screenPoint(page, 500, 320);
+  const scroll = await page.evaluate(async () => {
+    const before = window.scrollY;
+    window.scrollBy(0, 160);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    return window.scrollY - before;
+  });
+  expect(scroll).toBeGreaterThan(100);
+  const afterScroll = await screenPoint(page, 500, 320);
+  expect(beforeScroll.y - afterScroll.y).toBeCloseTo(scroll, 1);
+  const { anchor, point } = await viewport.evaluate((node) => {
+    const matrix = (node as SVGGElement).getScreenCTM()!;
+    const center = new DOMPoint(500, 320).matrixTransform(matrix);
+    // Native pointer coordinates are integers, so derive the world point from
+    // the exact cursor used by the event rather than the fractional center.
+    const anchor = { x: Math.round(center.x), y: Math.round(center.y) };
+    const point = new DOMPoint(anchor.x, anchor.y).matrixTransform(matrix.inverse());
+    return { anchor, point: { x: point.x, y: point.y } };
+  });
+  await page.mouse.move(anchor.x, anchor.y);
+  await page.mouse.wheel(0, -100);
+  await expect(page.locator('.atlas-zoom > span')).toHaveText('121%');
+  const during = await screenPoint(page, point.x, point.y);
+  expect(during.x).toBeCloseTo(anchor.x, 1);
+  expect(during.y).toBeCloseTo(anchor.y, 1);
+  await expect(surface).not.toHaveAttribute('data-map-transforming');
+  const committed = await screenPoint(page, point.x, point.y);
+  expect(committed.x).toBeCloseTo(anchor.x, 1);
+  expect(committed.y).toBeCloseTo(anchor.y, 1);
+  expect(await viewport.innerHTML()).toBe(artwork);
+  await page.waitForTimeout(850);
+  await unchangedInteraction(page, request, before);
+});
+
+test('a wheel in the pending scroll callback keeps its anchor before the previous SVG commit is acknowledged', async ({
+  page,
+  request,
+}) => {
+  const before = await workspace(request);
+  const viewport = page.locator('[data-map-viewport="true"]');
+  const surface = page.locator('.atlas-pan-surface');
+  const artwork = await viewport.innerHTML();
+  await page.evaluate(async () => {
+    document.body.style.paddingBottom = '800px';
+    window.scrollTo(0, 0);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
+  const original = await viewport.getAttribute('transform');
+  const firstAnchor = await screenPoint(page, 500, 320);
+  await page.mouse.move(Math.round(firstAnchor.x), Math.round(firstAnchor.y));
+  await page.mouse.wheel(0, -100);
+  await expect(page.locator('.atlas-zoom > span')).toHaveText('110%');
+  await expect(surface).toHaveAttribute('data-map-transforming', 'true');
+  const result = await page.locator('.atlas-canvas').evaluate(async (node) => {
+    const group = node.querySelector<SVGGElement>('[data-map-viewport]')!;
+    const surface = node.parentElement!;
+    const initialScroll = window.scrollY;
+    const beforeScroll = group.getAttribute('transform');
+    return new Promise<{
+      scroll: number;
+      trusted: boolean;
+      pending: string | null;
+      beforeScroll: string | null;
+      beforeSecondWheel: string | null;
+      afterSecondWheel: string | null;
+      anchor: { x: number; y: number };
+      point: { x: number; y: number };
+      during: { x: number; y: number };
+    }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        document.removeEventListener('scroll', scrolled);
+        reject(new Error('The requested document scroll event did not arrive.'));
+      }, 2000);
+      const scrolled = async (scrollEvent: Event) => {
+        clearTimeout(timer);
+        // The application's capture listener has run, while the setView RAF
+        // queued by it cannot have acknowledged a React commit yet. Dispatch
+        // the second wheel here to exercise that exact race, rather than rely
+        // on the scheduling gap between separate browser automation commands.
+        const beforeSecondWheel = group.getAttribute('transform');
+        const pending = surface.getAttribute('data-map-transforming');
+        const matrix = group.getScreenCTM()!;
+        const center = new DOMPoint(500, 320).matrixTransform(matrix);
+        const wheel = new WheelEvent('wheel', {
+          bubbles: true,
+          cancelable: true,
+          clientX: Math.round(center.x),
+          clientY: Math.round(center.y),
+          deltaY: -100,
+        });
+        const anchor = { x: wheel.clientX, y: wheel.clientY };
+        const point = new DOMPoint(anchor.x, anchor.y).matrixTransform(matrix.inverse());
+        node.dispatchEvent(wheel);
+        const afterSecondWheel = group.getAttribute('transform');
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const during = new DOMPoint(point.x, point.y).matrixTransform(group.getScreenCTM()!);
+        resolve({
+          scroll: window.scrollY - initialScroll,
+          trusted: scrollEvent.isTrusted,
+          pending,
+          beforeScroll,
+          beforeSecondWheel,
+          afterSecondWheel,
+          anchor,
+          point: { x: point.x, y: point.y },
+          during: { x: during.x, y: during.y },
+        });
+      };
+      // A native document scroll reaches this target listener after capture
+      // listeners on both window and document, regardless of registration order.
+      document.addEventListener('scroll', scrolled, { once: true });
+      window.scrollBy(0, 160);
+    });
+  });
+  expect(result.scroll).toBeGreaterThan(100);
+  expect(result.trusted).toBe(true);
+  expect(result.pending).toBe('true');
+  expect(result.beforeScroll).toBe(original);
+  expect(result.beforeSecondWheel).toBe(original);
+  expect(result.afterSecondWheel).toBe(original);
+  expect(Number.isInteger(result.anchor.x) && Number.isInteger(result.anchor.y)).toBe(true);
+  expect(result.during.x).toBeCloseTo(result.anchor.x, 1);
+  expect(result.during.y).toBeCloseTo(result.anchor.y, 1);
+  await expect(page.locator('.atlas-zoom > span')).toHaveText('121%');
+  await expect(surface).not.toHaveAttribute('data-map-transforming');
+  const committed = await screenPoint(page, result.point.x, result.point.y);
+  expect(committed.x).toBeCloseTo(result.anchor.x, 1);
+  expect(committed.y).toBeCloseTo(result.anchor.y, 1);
+  expect(await viewport.innerHTML()).toBe(artwork);
+  await page.waitForTimeout(850);
+  await unchangedInteraction(page, request, before);
+});
