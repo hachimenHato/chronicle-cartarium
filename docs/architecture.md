@@ -461,7 +461,7 @@ shared/plate-names.ts 使用独立的确定性文字名映射，不消费地形�
 
 ## Windows桌面程序自动更新
 
-原生帮助菜单由Electron主进程控制，不向网页开放通用IPC。每次检查与安装前读取当前浏览器会话身份并要求主管理员；开启登录时未登录、次级管理员、普通用户或未保存编辑拒绝安装，免登录模式仍采用服务端的owner身份。独立Node子进程运行scripts/desktop-update.ts，复用HTTPS公网/DNS固定/限跳/流式下载器；后台128MiB上限保持，桌面显式512MiB。独立Ed25519描述绑定ZIP、版本、最低壳版本、全部文件树和三个启动组件，唯一公钥源shared/release-trust.json；镜像不能改变信任。
+原生帮助菜单由Electron主进程控制，不向网页开放通用IPC。每次检查与安装前读取当前浏览器会话身份并要求主管理员；开启登录时未登录、次级管理员、普通用户或未保存编辑拒绝安装，免登录模式仍采用服务端的owner身份。原workspace后端必须先升级到beta.19以提供桌面维护租约；配置端点404明确拒绝并提示先升级后端，不回退成无租约更新，401/403同样拒绝。独立Node子进程运行scripts/desktop-update.ts，复用HTTPS公网/DNS固定/限跳/流式下载器；后台128MiB上限保持，桌面显式512MiB。独立Ed25519描述绑定ZIP、版本、最低壳版本、全部文件树和三个启动组件，唯一公钥源shared/release-trust.json；镜像不能改变信任。
 
 ZIP在新建.desktop/releases/shell-UUID/app中解压，PowerShell/.NET先检查全部路径、设备名、大小、重复及链接再写，拒绝workspace/.desktop/data/账号/私钥等，完整树与签名一致才准备成功。旧EXE与工作台不被替换，原.desktop/settings.json与workspace指针保留。下载可取消，验签/备份后等待；独立程序门和active-job记录阻止并发。
 

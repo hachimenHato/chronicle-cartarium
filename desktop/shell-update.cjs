@@ -120,11 +120,11 @@ class ShellUpdater {
       { credentials: 'include' },
     );
     if (online.ok) return (await online.json()).settings;
-    if (online.status !== 404) throw new Error('无法确认主管理员的更新配置，请重新登录后重试。');
-    return {
-      source: 'github',
-      channel: this.app.getVersion().includes('-') ? 'preview' : 'stable',
-    };
+    if (online.status === 404)
+      throw new Error(
+        '请先在工作台后台导入对应签名更新包，将工作台后端升级到 beta.19 或更新版本，再更新桌面程序。',
+      );
+    throw new Error('无法确认主管理员的更新配置，请重新登录后重试。');
   }
   async execute(action, settings, version, onProgress, onChild) {
     const directory = path.join(this.base, '.desktop/updates');
@@ -343,6 +343,8 @@ class ShellUpdater {
       await save(activeFile, { id, parentPid: process.pid, helperPid: helper.pid });
       helper.unref();
       handedOff = true;
+      if (progressWindow && !progressWindow.isDestroyed()) progressWindow.destroy();
+      progressWindow = undefined;
       this.handoff();
     } catch (error) {
       if (stopped && !handedOff) {
@@ -364,7 +366,7 @@ class ShellUpdater {
           await fs.unlink(activeFile).catch(() => {});
       }
       if (progressWindow && !progressWindow.isDestroyed()) progressWindow.destroy();
-      this.window.setProgressBar(-1);
+      if (!this.window.isDestroyed()) this.window.setProgressBar(-1);
       this.active = false;
       this.setBusy(false);
     }

@@ -56,7 +56,7 @@ test('native desktop updates require owner identity and never treat permission e
       },
     },
   });
-  assert.deepEqual(await updater.ownerSettings(), { source: 'github', channel: 'preview' });
+  await assert.rejects(updater.ownerSettings(), /工作台后端升级/);
   permission = 401;
   await assert.rejects(updater.ownerSettings(), /更新配置/);
 });
