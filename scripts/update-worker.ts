@@ -6,6 +6,7 @@ import { verifyRelease } from '../server/release-package';
 import { recoverBackup } from '../server/backup-recovery';
 import { digest, fileDigest } from '../server/full-backup';
 import type { ProgramUpdateStatus } from '../shared/update';
+import { updateRuntimeCommand } from '../server/update-runtime';
 
 const [action, installRoot, packageId, sourceData, backupId] = process.argv.slice(2);
 if (!installRoot || !path.isAbsolute(installRoot))
@@ -35,12 +36,7 @@ try {
     const program = path.join(root, 'staged', packageId, 'program');
     const manifest = await verifyRelease(program, await currentVersion());
     await state('preparing', '正在准备新版运行组件；原工作台继续运行…', manifest.version);
-    const executable =
-      process.platform === 'win32' ? path.join(program, 'runtime/node.exe') : process.execPath;
-    const npm =
-      process.platform === 'win32'
-        ? path.join(program, 'runtime/node_modules/npm/bin/npm-cli.js')
-        : process.env.npm_execpath;
+    const { executable, args } = await updateRuntimeCommand(program);
     const env = { ...process.env };
     for (const name of [
       'DATABASE_URL',
@@ -55,10 +51,7 @@ try {
       'DOTENV_CONFIG_PATH',
     ])
       delete env[name];
-    const args = npm
-      ? [npm, 'ci', '--ignore-scripts', '--no-audit', '--no-fund']
-      : ['ci', '--ignore-scripts', '--no-audit', '--no-fund'];
-    const child = spawn(npm ? executable : 'npm', args, {
+    const child = spawn(executable, args, {
       cwd: program,
       env,
       windowsHide: true,

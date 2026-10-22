@@ -2,9 +2,9 @@
 
 **为 TRPG 主持人与世界构建者准备的地图、设定、人物关系与剧情工作台。**
 
-通过浏览器使用，部署在自己的电脑或服务器。首次安装明确选择 **本地 SQLite** 或 **MySQL**，本地模式无需另装数据库。中文界面，目前为 **0.2.0-beta.18 公开测试版**。
+通过浏览器使用，部署在自己的电脑或服务器。首次安装明确选择 **本地 SQLite** 或 **MySQL**，本地模式无需另装数据库。中文界面，目前为 **0.2.0-beta.19 公开测试版**。
 
-[下载发行版](https://github.com/hachimenHato/chronicle-cartarium/releases) · [安装与部署](docs/installation.md) · [更新与数据保护](docs/update-strategy.md) · [问题反馈](https://github.com/hachimenHato/chronicle-cartarium/issues)
+[下载发行版](https://github.com/hachimenHato/chronicle-cartarium/releases) · [安装与部署](docs/installation.md) · **[各平台更新教程](docs/update-guide.md)** · [更新与数据保护](docs/update-strategy.md) · [问题反馈](https://github.com/hachimenHato/chronicle-cartarium/issues)
 
 <img src="public/covers/moon-town.png" alt="应用自带的月夜城镇封面插画，并非地图生成截图" width="280">
 
@@ -19,9 +19,11 @@
 
 安装时可选原创日式中世纪剑与魔法范例：85 条世界设定、20 位人物、4 张地图、30 条关系、18 个剧情场景及 GM 计划等。默认不填充。
 
-## beta.18 更新
+## beta.19 更新
 
-改善地图放大、滚轮缩放和高倍率拖动：完整地形与羊皮纸底图提前缓存，地名、标记及编辑覆盖保持矢量显示。原始地图、编辑坐标和 SVG 导出保留。首次打开需要短暂准备，超出缓存尺寸预算会使用原绘制方式；[性能说明与验证范围](docs/map-performance.md)。
+新增“检查更新 → 下载并安全更新”，默认从 GitHub 获取适配当前系统、架构的官方签名包，自动验证后进入完整备份、恢复验证与程序切换流程。保留离线导入，提供自建 HTTPS 镜像入口及 GitHub 回退；没有内置国内加速站。未保存草稿、隐藏窗口或离开更新页面会暂停自动安装，不强制刷新创作页面。
+
+**旧 beta.18 及之前版本需先离线升级一次。** Windows 桌面/CMD、Linux、macOS、源码/服务器和 Docker 的具体步骤、失败处理与限制见 **[各平台更新教程](docs/update-guide.md)**。地图高倍率浏览优化继续保留，详见[性能说明](docs/map-performance.md)。
 
 ## 界面预览
 
@@ -88,7 +90,16 @@ docker compose -f docker-compose.image.yml up -d
 
 后台完整 `.ccbackup` 包含账号密码哈希与数据库凭据，**目前不加密，请私密保存**。JSON/Markdown 不包含上传原图，不能代替完整备份。
 
-已有实例优先使用后台受签名 `.ccupdate`：校验、排空写入、备份并验证后切换。同系统、同架构、兼容数据格式才允许更新，尚无联网自动更新。普通 ZIP/TAR 是新安装包，不能当作更新包。迁机、Docker 更新和恢复见 [更新说明](docs/update-strategy.md)。已有数据却出现安装向导时先检查路径，**不要重新初始化**。
+已有实例使用后台受签名 `.ccupdate`：校验、排空写入、完整备份并验证后切换，同系统、同架构、兼容数据格式才允许更新。beta.19 起支持“检查更新 → 下载并安全更新”；旧版先离线升级一次，之后有兼容新版时使用在线入口。离线导入继续保留，普通 ZIP/TAR 不能当作更新包。
+
+| 使用方式               | 更新入口                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| Windows 桌面后端 / CMD | 同一份 Windows x64 `.ccupdate`；桌面 EXE 外壳另解压新包并打开原工作台            |
+| Linux / macOS          | 选择相同系统、架构的签名 `.ccupdate`；完整升级恢复验收范围以本版 Release 为准    |
+| 源码 / 长期服务器      | 固定安装根的 `scripts/launch.mjs` 启动后使用签名更新；手动迁移须保留或恢复原资料 |
+| Docker                 | 宿主机保留原项目、卷和配置后更换镜像；不能用网页 `.ccupdate` 替换容器            |
+
+逐步操作见 **[各平台更新教程](docs/update-guide.md)**，保护机制和实测边界见[更新说明](docs/update-strategy.md)。已有数据却出现安装向导时先检查路径，**不要重新初始化**。
 
 ## 当前边界
 

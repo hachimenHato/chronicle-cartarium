@@ -27,6 +27,7 @@ import { APPLICATION_VERSION } from '../shared/application';
 import { MaintenanceError, DataProtectionError } from './maintenance';
 import { FullBackupService, digest } from './full-backup';
 import { ProgramUpdateService } from './program-update';
+import { OnlineUpdateService } from './online-update';
 
 export function imageExtension(buffer: Buffer): 'png' | 'jpg' | 'webp' | undefined {
   if (
@@ -103,6 +104,7 @@ export async function createApp(
     throw new InstallationError('配置不一致：多用户模式必须启用登录，请恢复完整安装配置。');
   const fullBackups = management && users ? new FullBackupService(management, users) : undefined;
   const updates = management ? new ProgramUpdateService(config) : undefined;
+  const onlineUpdates = updates ? new OnlineUpdateService(updates) : undefined;
   const actor = (req: express.Request): UserAccount | undefined => {
     const id = auth.userId(req);
     return id ? (users ? users.actor(id) : { ...ownerAccount(), tourCompleted: true }) : undefined;
@@ -366,6 +368,32 @@ export async function createApp(
     app.get('/api/admin/updates', async (req, res) => {
       requireOwner(actor(req)!);
       res.json(await updates!.status());
+    });
+    app.get('/api/admin/updates/online', async (req, res) => {
+      requireOwner(actor(req)!);
+      res.json(await onlineUpdates!.status());
+    });
+    app.post('/api/admin/updates/online/check', async (req, res) => {
+      requireOwner(actor(req)!);
+      z.object({}).strict().parse(req.body);
+      res.json(await onlineUpdates!.check());
+    });
+    app.put('/api/admin/updates/online/settings', async (req, res) => {
+      requireOwner(actor(req)!);
+      res.json(await onlineUpdates!.saveSettings(req.body));
+    });
+    app.post('/api/admin/updates/online/download', async (req, res) => {
+      requireOwner(actor(req)!);
+      const input = z
+        .object({ version: z.string().max(80) })
+        .strict()
+        .parse(req.body);
+      res.json(await onlineUpdates!.startDownload(input.version));
+    });
+    app.post('/api/admin/updates/online/cancel', async (req, res) => {
+      requireOwner(actor(req)!);
+      const input = z.object({ id: z.string().uuid() }).strict().parse(req.body);
+      res.json(await onlineUpdates!.cancel(input.id));
     });
     const updateIncoming = path.join(updates!.root, 'incoming');
     const updateUpload = multer({

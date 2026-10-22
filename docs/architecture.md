@@ -1,5 +1,15 @@
 # 架构与数据约定
 
+## 在线来源与受保护的程序更新（2026-10-22）
+
+shared/update定义在线来源、频道、发行候选和下载任务，与监督程序的持久安装阶段分开。server/online-update管理主管理员的GitHub/自建HTTPS镜像配置、缓存检查、下载进度与取消；GET状态只读取本地进度，显式检查才访问公开发行列表。只选择严格版本标签及当前系统/架构的标准`.ccupdate`附件，镜像元数据仍指向固定官方仓库；镜像实际包为BASE/vVERSION/FILENAME，清单为BASE/releases.json。失败回退GitHub，不接受任意元数据下载地址或未知公钥。
+
+server/update-download负责逐跳HTTPS、公开DNS结果验证与绑定、重定向/时间/流字节预算、流式写入新文件、精确大小与SHA-256检查；不发送登录Cookie、应用令牌或数据库配置。准备阶段再由release-package使用原固定公钥验证签名、文件、版本、平台及数据格式。ProgramUpdateService对在线下载/验签、离线导入和提交安装串行互斥；网络下载不持有创作维护门禁。只有已准备并再次校验的包才能写pending-update，后续仍由固定scripts/launch.mjs完成备份和切换。
+
+ProgramUpdatePanel只对本次点击产生且仍匹配的下载任务保留自动安装意图，完成后重新检查当前canUpdate、可见性和组件生命周期；有草稿或离开页面时只保留已验证包。重新进入不会自动应用旧任务，不自动刷新；提交apply仍由服务端重新验证主管理员权限和包身份。源配置仅为安装根.worldloom中的非创作偏好，不改变workspace、revision或业务数据库；该偏好不在创作JSON/完整资料恢复的保证范围，换机可重新填写。
+
+scripts/create-update-mirror.mjs从本地公开清单与平铺的原始包生成全新静态镜像，过滤非更新附件/多余字段、拒绝重复或不匹配包，复制后复验并最后写清单；不含签名私钥，也不联网发布。公开beta.18只有Windows x64签名包，Linux/macOS新安装包不能代替；Docker不在Web进程控制宿主机，Electron壳和固定Node运行时不由后端更新替换。当前实现和验证边界见[更新说明](update-strategy.md)及开发日志。
+
 ## 可丢弃的完整底图显示缓存（2026-10-21本地补丁）
 
 Atlas将地形与纸面集中在data-map-cache-source组，useMapRasterCache只在源图改变时准备独立HTML Canvas；地名、军线、笔画、标记和编辑覆盖继续由SVG绘制。原底图仅通过外层CSS隐藏颜色，保留命中；导出仍克隆原SVG，缓存不进入领域模型与存储。源图变化立即恢复原矢量，异步字体／上传图片／解码受版本号约束；手势中不替换显示，切图或卸载释放资源。
@@ -96,7 +106,7 @@ server/geographic-validation限制字段、预算、数值、坐标与内部关�
 
 ## 更新与完整备份架构（beta.5）
 
-scripts/launch.mjs是固定安装根的外部监督程序；.worldloom/current.json绑定绝对dataDir及当前程序。Web只提交受约束离线包任务，监督程序准备依赖、维护备份、切换自己的子进程、校验后开放保存，失败恢复到新目录/项目库。维护门禁覆盖InstallationManager和UserDirectoryStore全部写入并排空已接受操作，实例锁阻止重复打开数据目录。持久完成记录先于开放写入，确认回应丢失后不回退旧快照。Linux共享入口与Docker宿主机脚本已有源码，实机仍未验收；在线发布源及跨schema迁移未实现。
+scripts/launch.mjs是固定安装根的外部监督程序；.worldloom/current.json绑定绝对dataDir及当前程序。Web提交经验证的离线导入包或在线下载包任务，监督程序准备依赖、维护备份、切换自己的子进程、校验后开放保存，失败恢复到新目录/项目库。维护门禁覆盖InstallationManager和UserDirectoryStore全部写入并排空已接受操作，实例锁阻止重复打开数据目录。持久完成记录先于开放写入，确认回应丢失后不回退旧快照。Linux共享入口与Docker宿主机脚本已有源码，完整升级实机矩阵仍未验收；跨schema迁移未开放。
 
 server/full-backup、mysql-backup、backup-recovery实现数据库/创作快照/安装及用户/上传及索引/显式私有环境的一致快照、散列验证和新目标恢复。SQLite用在线backup API后只整理副本；MySQL原始标准表行恢复到全新库并核对。备份成功前实际读取副本、比较revision/领域摘要并验证全部图片。私有下载主管理员重认证，当前不加密。SQLite/MySQL和私有格式在DDL前拒绝未知版本。shared/release-trust的固定公钥验证Ed25519清单及所有资源、系统/架构/起点；当前只接受MySQL5/SQLite1/创作与私有格式1，不含跨格式迁移。X-Chronicle Cartarium-Client拒绝旧浏览器写入；编译app-version同时包含程序版本。原创作JSON仍只包含创作数据。操作与限制见[update-strategy.md](update-strategy.md)。
 
