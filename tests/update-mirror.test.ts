@@ -73,6 +73,24 @@ test('mirror builder copies only original matching packages, strips nonpublic fi
   assert.deepEqual(await readdir(path.join(f.output, 'v0.2.0-beta.19')), [name]);
 });
 
+test('mirror builder includes the desktop archive only together with its signed descriptor', async (t) => {
+  const f = await fixture(t);
+  const value = release();
+  for (const suffix of ['.zip', '.update.json']) {
+    const desktop = `chronicle-cartarium-0.2.0-beta.19-windows-desktop-x64${suffix}`;
+    await writeFile(path.join(f.packages, desktop), content);
+    value.assets.push({
+      ...value.assets[0],
+      name: desktop,
+      browser_download_url: `${repository}/releases/download/v0.2.0-beta.19/${desktop}`,
+    });
+  }
+  await writeFile(f.catalog, JSON.stringify([value]));
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal((await readdir(path.join(f.output, 'v0.2.0-beta.19'))).length, 3);
+});
+
 test('mirror builder refuses tampering, duplicate assets or releases, unsafe URLs and paths before creating output', async (t) => {
   const f = await fixture(t);
   const cases = [

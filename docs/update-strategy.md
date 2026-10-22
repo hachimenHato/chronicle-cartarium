@@ -21,7 +21,7 @@
 
 默认下载源为本项目GitHub Releases，不需要填写GitHub令牌。公开测试版默认查看预发行频道，可切换到稳定版频道；稳定版频道不包含alpha/beta/rc。后台轮询的是本机任务进度，不会每隔几秒访问GitHub。检查结果会缓存，接口限流或网络失败显示错误，不影响创作。只有相同系统、CPU架构的受签名更新包才显示可安装，不能把普通ZIP/TAR下载包用于更新。
 
-beta.19 发行按 Windows x64、Linux x64/arm64、macOS x64/arm64 分别提供标准名 `.ccupdate`，实际可用附件以对应 Release 为准。它们不能跨系统或架构使用，签名/归档校验通过也不等于所有平台都完成了原生升级与失败恢复演练。桌面在线更新仅更新工作台后端，不能替换 Electron 窗口壳或固定 Node 运行时。Docker 需使用宿主机流程。首次准备依赖和更新时的依赖准备仍需要 npm 网络或预先配置好的依赖源；程序包下载镜像不加速 npm 依赖下载。尚无定时备份、无人值守自动安装或下载断点续传。
+beta.19 发行按 Windows x64、Linux x64/arm64、macOS x64/arm64 分别提供标准名 `.ccupdate`，实际可用附件以对应 Release 为准。它们不能跨系统或架构使用，签名/归档校验通过也不等于所有平台都完成了原生升级与失败恢复演练。后台在线更新处理工作台后端；Windows 桌面“帮助 → 检查桌面程序更新…”独立处理 EXE、Electron 与随包运行组件，使用单独的官方签名桌面描述和全文件校验。现有 workspace 后端与固定运行时文件不被模板覆盖，后台和窗口版本分别核验。Docker 需使用宿主机流程。首次准备依赖和更新时的依赖准备仍需要 npm 网络或预先配置好的依赖源；程序包下载镜像不加速 npm 依赖下载。尚无定时备份、无人值守自动安装或下载断点续传。
 
 ### GitHub与国内镜像
 
@@ -46,7 +46,7 @@ chronicle-cartarium/
 node scripts/create-update-mirror.mjs --catalog public-releases.json --packages signed-packages --output new-mirror-directory
 ```
 
-源包目录按附件名平铺；工具只复制清单中大小、摘要均匹配的`.ccupdate`，净化发行字段，拒绝重复包和已有输出目录。最后才写`releases.json`，复制失败的目录不能上传。此工具不联网、不上传、不签名，也不会复制源目录中的其他文件；必须由维护者将生成目录发布到自己的HTTPS静态存储。始终先上传完整包、最后更新清单，避免客户端看到尚未就绪的版本。GitHub公开API存在[访问频率限制](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)，不应通过高频自动检查绕过。
+源包目录按附件名平铺；工具只复制清单中大小、摘要均匹配的`.ccupdate`，以及成对存在的 Windows 桌面 ZIP 和 `.update.json` 签名描述，净化发行字段，拒绝重复包和已有输出目录。最后才写`releases.json`，复制失败的目录不能上传。此工具不联网、不上传、不签名，也不会复制源目录中的其他文件；必须由维护者将生成目录发布到自己的HTTPS静态存储。始终先上传完整包、最后更新清单，避免客户端看到尚未就绪的版本。GitHub公开API存在[访问频率限制](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)，不应通过高频自动检查绕过。
 
 ## 2. 数据保护范围与兼容边界
 
@@ -96,7 +96,7 @@ Windows可把命令里的 `node` 换成安装根 `runtime\node.exe`，路径有�
 
 Windows便携安装使用固定安装根的 `start.cmd`，数据仍在安装目录，程序版本另外存放。普通更新不用手动搬文件或换数据库。固定安装根不能只复制一个新版releases子目录当作整套安装。
 
-Windows桌面版使用相同受管理后端和固定数据目录，后台在线按钮只替换工作台程序；升级Electron窗口壳时需另外下载桌面ZIP，并沿用原工作台目录，不能删除或重新填例。桌面退出或更新中断的边界见[桌面说明](desktop.md)。
+Windows桌面版使用相同受管理后端和固定数据目录，后台在线按钮只替换工作台程序；beta.19 起用原生帮助菜单自动升级 Electron 窗口壳；旧壳手动过渡及备用解压方法沿用原工作台目录，不能删除或重新填例。桌面退出或更新中断的边界见[桌面说明](desktop.md)。
 
 Linux 本机使用 `sh start.sh`，macOS 使用 `start.command` 或 `sh start.sh`。对应平台包附带各自架构的 Node/npm 运行时；从源码运行才需另备 Node22.18+ 与 npm。共享启动器用 Node 实现，不依赖盘符；Windows 的 node.exe 不能用于 Linux/macOS。在线入口按平台识别签名更新包；beta.19 为五个发行目标准备更新附件，但不能把它等同于各平台完整升级/失败恢复都已实机验收。旧 Unix 版本首次离线过渡的运行组件要求见[教程](update-guide.md)。各平台的新安装/CI范围见[README支持表](../README.md#版本与平台支持)。
 
@@ -136,9 +136,9 @@ node scripts/update-docker.mjs trusted-registry/chronicle-cartarium@sha256:完�
 node --import tsx scripts/sign-release.ts .runtime/release/实际发布目录
 ```
 
-签名私钥仅存 `.runtime/release-signing-private.pem` 或指定的私有位置；必须另做私密备份，换电脑继续沿用，不能提交/公开或装进用户包。公钥在 `shared/release-trust.ts`。`scripts/release-keygen.mjs`只用于首次建立信任；已有公钥但丢失私钥会拒绝重建，不能让旧用户失去验证未来包的能力。密钥轮换需单独设计。
+签名私钥仅存 `.runtime/release-signing-private.pem` 或指定的私有位置；必须另做私密备份，换电脑继续沿用，不能提交/公开或装进用户包。唯一公钥数据在 `shared/release-trust.json`，Node 与桌面从同一来源读取，`shared/release-trust.ts` 提供类型导出。`scripts/release-keygen.mjs`只用于首次建立信任；已有公钥但丢失私钥会拒绝重建，不能让旧用户失去验证未来包的能力。密钥轮换需单独设计。
 
-先完成程序、文档和构建，再签名；签名后改任何发行文件必须重新签名。release manifest同时校验package、服务端版本与前端app-version，避免程序更新而网页仍是旧版。当前压缩包上传128MiB，解压更新512MiB，恢复包最大10GiB/10万文件；很大的实例需后续容量与流式下载验收。
+先完成程序、文档和构建，再签名；签名后改任何发行文件必须重新签名。release manifest同时校验package、服务端版本与前端app-version，避免程序更新而网页仍是旧版。后台更新包上传128MiB、解压512MiB；独立桌面 ZIP 下载512MiB、解压2GiB/10万文件且至少3GB可用空间，恢复包最大10GiB/10万文件；很大的实例需后续容量与流式下载验收。
 
 本轮已通过新下载器读取真实GitHub发行清单，完整下载beta.18 Windows x64更新包（69,135,691字节），验证TLS重定向、大小、SHA-256、原固定公钥签名及全部清单文件；仅验证与准备，没有安装该包或修改现有资料。这不是跨版本安装、跨平台升级或断电验收。
 

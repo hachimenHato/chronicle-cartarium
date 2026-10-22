@@ -3,6 +3,7 @@ const path = require('node:path');
 const { mkdir, readFile, writeFile } = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { bootstrapInstance, BackendSession, isProgram } = require('./service.cjs');
+const { ShellUpdater, delegateUpdatedShell, reportShellStartup } = require('./shell-update.cjs');
 const brand = require('../shared/brand.json');
 
 const base = process.env.CHRONICLE_CARTARIUM_DESKTOP_ROOT
@@ -130,6 +131,7 @@ async function quit() {
   }
 }
 async function initialize() {
+  if (await delegateUpdatedShell(app, base)) return;
   require('node:fs').mkdirSync(path.join(base, '.desktop'), { recursive: true });
   app.setPath('userData', path.join(base, '.desktop'));
   if (!app.requestSingleInstanceLock()) {
@@ -275,6 +277,10 @@ async function initialize() {
         label: '帮助',
         submenu: [
           {
+            label: '检查桌面程序更新…',
+            click: () => void shellUpdater.check(),
+          },
+          {
             label: '使用说明',
             click: () =>
               shell.openExternal('https://github.com/hachimenHato/chronicle-cartarium#readme'),
@@ -292,6 +298,24 @@ async function initialize() {
       },
     ]),
   );
+  const shellUpdater = new ShellUpdater({
+    app,
+    BrowserWindow,
+    dialog,
+    window,
+    base,
+    template,
+    getBackend: () => backend,
+    canBegin: () => !busy && !quitReady && !loading,
+    setBusy: (value) => {
+      busy = value;
+    },
+    handoff: () => {
+      quitReady = true;
+      allowingUnload = true;
+      app.quit();
+    },
+  });
   let selected = path.join(base, 'workspace');
   try {
     const settings = JSON.parse(await readFile(preferences, 'utf8'));
@@ -301,6 +325,19 @@ async function initialize() {
     if (error.code !== 'ENOENT') throw new Error('桌面目录设置无效，未切换到空白工作台。');
   }
   await openWorkspace(selected, selected === path.join(base, 'workspace'));
+  if (!loading && backend)
+    await writeFile(
+      path.join(base, '.desktop/shell-session.json'),
+      JSON.stringify({
+        format: 1,
+        version: app.getVersion(),
+        pid: process.pid,
+        executable: app.getPath('exe'),
+        workspace: backend.directory,
+      }),
+      { mode: 0o600 },
+    );
+  await reportShellStartup(app, base, backend, !loading);
 }
 initialize().catch(async (error) => {
   await app.whenReady();

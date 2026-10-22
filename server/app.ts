@@ -28,6 +28,7 @@ import { MaintenanceError, DataProtectionError } from './maintenance';
 import { FullBackupService, digest } from './full-backup';
 import { ProgramUpdateService } from './program-update';
 import { OnlineUpdateService } from './online-update';
+import { UpdateControlLease } from './update-control-lease';
 
 export function imageExtension(buffer: Buffer): 'png' | 'jpg' | 'webp' | undefined {
   if (
@@ -313,12 +314,12 @@ export async function createApp(
     res.json(await store.save(input.data, input.revision));
   });
   if (management) {
-    let updateRelease: (() => void) | undefined;
+    const updateControl = new UpdateControlLease(management.maintenance);
     app.post(
       ['/_chronicle-cartarium/update/:action', '/_worldloom/update/:action'],
       async (req, res) => {
         const input = z
-          .object({ token: z.string().min(1) })
+          .object({ token: z.string().min(1), lease: z.string().uuid().optional() })
           .strict()
           .parse(req.body);
         if (
@@ -331,22 +332,33 @@ export async function createApp(
         )
           return res.status(401).json({ error: 'runner_required' });
         if (req.params.action === 'backup') {
-          updateRelease = await management.maintenance.acquire();
-          try {
-            const before = await management.read();
-            return res.json(await fullBackups!.create(before.revision, true));
-          } catch (error) {
-            updateRelease();
-            updateRelease = undefined;
-            throw error;
-          }
+          return res.json(
+            await updateControl.backup(
+              input.lease,
+              async () => {
+                const before = await management.read();
+                return fullBackups!.create(before.revision, true);
+              },
+              (abandon) => {
+                res.once('close', () => {
+                  if (!res.writableFinished) abandon();
+                });
+              },
+            ),
+          );
         }
         if (req.params.action === 'release') {
-          updateRelease?.();
-          updateRelease = undefined;
+          const result = updateControl.release(input.lease);
+          if (result === 'mismatch')
+            return res.status(409).json({
+              error: 'update_lease_mismatch',
+              message: '此维护任务属于另一个更新操作，未解除其写入保护。',
+            });
+          if (result === 'pending') return res.json({ released: false, pending: true });
           // Startup hold belongs to this process and is released after the protected health check.
-          if (management.maintenance.busy) management.maintenance.releaseStartupHold();
-          return res.json({ released: true });
+          if (result === 'absent' && !input.lease && management.maintenance.busy)
+            management.maintenance.releaseStartupHold();
+          return res.json({ released: result === 'released' || !input.lease });
         }
         if (req.params.action === 'health') {
           const saved = await management.read();

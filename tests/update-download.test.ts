@@ -483,3 +483,32 @@ test('cancellation interrupts pending DNS without starting a transport', async (
   await assert.rejects(pending, { name: 'AbortError' });
   assert.equal(requested, false);
 });
+
+test('desktop downloads can opt into a bounded 512MiB limit while backend downloads retain 128MiB', async (t) => {
+  const root = await directory(t);
+  assert.throws(() => createUpdateDownloader({ fileLimit: 513 * 1024 ** 2 }));
+  const fixture = transport([{ chunks: ['x'] }]);
+  const expected = { bytes: 129 * 1024 ** 2, sha256: sha256('x') };
+  await assert.rejects(
+    createUpdateDownloader().downloadUpdateFile(
+      'https://mirror.example/file',
+      path.join(root, 'default'),
+      expected,
+      () => {},
+    ),
+    /大小/,
+  );
+  await assert.rejects(
+    createUpdateDownloader({
+      fileLimit: 512 * 1024 ** 2,
+      request: fixture.request,
+      lookup: async () => PUBLIC,
+    }).downloadUpdateFile(
+      'https://mirror.example/file',
+      path.join(root, 'desktop'),
+      expected,
+      () => {},
+    ),
+    /不完整/,
+  );
+});

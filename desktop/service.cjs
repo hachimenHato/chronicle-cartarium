@@ -103,13 +103,13 @@ class BackendSession {
     this.origin = undefined;
     this.port = undefined;
   }
-  async control(action, timeout = 5000) {
+  async control(action, timeout = 5000, lease) {
     if (!this.origin) throw new Error('工作台尚未连接。');
     const token = await readFile(path.join(this.directory, '.worldloom/runner.key'), 'utf8');
     const result = await fetch(`${this.origin}/_worldloom/update/${action}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, ...(lease ? { lease } : {}) }),
       signal: AbortSignal.timeout(timeout),
     });
     if (!result.ok) throw new Error('未能确认工作台身份，未执行控制操作。');

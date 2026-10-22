@@ -457,4 +457,14 @@ shared/plate-names.ts 使用独立的确定性文字名映射，不消费地形�
 
 已有服务必须以所选目录的控制钥匙完成健康确认才附接；持久 PID 不作为停止权限依据。附接服务的窗口退出不发送 shutdown。自己启动的服务经受保护接口正常停止，并等待固定启动器退出；挂起/运行更新任务时拒绝中断。后端依然执行登录、模块/逐条权限与 revision 校验，桌面不绕过主管理员授权。
 
-桌面 ZIP 是额外发行，原 CMD/服务器和其他系统包保留。桌面壳升级与 workspace 内受签名后端更新分开，不能删数据或自动覆盖旧 workspace。源码构建/四项保护单测/原生 GUI 与 CMD 附接测试见 docs/desktop.md；测试只在 .runtime 下新建合成 SQLite 实例。商业代码签名、安装器、桌面壳自动升级和全部断电场景未完成，不将便携程序当作这些功能已经实现。
+桌面 ZIP 是额外发行，原 CMD/服务器和其他系统包保留。桌面壳升级与 workspace 内受签名后端更新分开，不能删数据或自动覆盖旧 workspace。源码构建、保护单测、原生 GUI 与 CMD 附接测试见 docs/desktop.md；测试只在 .runtime 下新建合成 SQLite 实例。beta.19 起提供下节的桌面壳自动升级；商业代码签名、系统安装器和全部断电场景仍未完成，不把这些能力一并视为已经实现。
+
+## Windows桌面程序自动更新
+
+原生帮助菜单由Electron主进程控制，不向网页开放通用IPC。每次检查与安装前读取当前浏览器会话身份并要求主管理员；开启登录时未登录、次级管理员、普通用户或未保存编辑拒绝安装，免登录模式仍采用服务端的owner身份。独立Node子进程运行scripts/desktop-update.ts，复用HTTPS公网/DNS固定/限跳/流式下载器；后台128MiB上限保持，桌面显式512MiB。独立Ed25519描述绑定ZIP、版本、最低壳版本、全部文件树和三个启动组件，唯一公钥源shared/release-trust.json；镜像不能改变信任。
+
+ZIP在新建.desktop/releases/shell-UUID/app中解压，PowerShell/.NET先检查全部路径、设备名、大小、重复及链接再写，拒绝workspace/.desktop/data/账号/私钥等，完整树与签名一致才准备成功。旧EXE与工作台不被替换，原.desktop/settings.json与workspace指针保留。下载可取消，验签/备份后等待；独立程序门和active-job记录阻止并发。
+
+完整备份恢复验证后正常关闭自己拥有的后端；附接外部服务只释放自身维护门，不停止该服务。独立helper等待旧PID退出，不强杀，再启动已验证新版；新壳确认随机nonce、原workspace、账号/授权摘要与不降低的revision后才原子提交current-shell指针。完成后旧入口代理到新版本。失败不恢复任何世界旧快照，保留原指针；若失败新窗口仍活着需先关闭再重开，避免强杀。挂起/断电的所有组合未完整验收，旧版本与备份不自动清理。
+
+发布者在完整桌面ZIP逐文件验证后运行scripts/sign-desktop-release.ts生成同名.update.json；不带私钥、用户目录或更新任务。它与后端.ccupdate是不同包，Docker不使用桌面更新器。

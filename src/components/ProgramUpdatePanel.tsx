@@ -510,7 +510,7 @@ export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
         </p>
       )}
       <p className="program-update-small">
-        此入口更新创作工作台。Windows 桌面版的窗口外壳若有更新，仍需另行下载安装新版桌面应用。
+        此入口更新创作工作台。Windows 桌面程序可从窗口“帮助 → 检查桌面程序更新…”自动更新。
       </p>
       {draft && (
         <details className="program-update-advanced">

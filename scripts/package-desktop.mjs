@@ -52,9 +52,17 @@ const payload = path.join(work, 'shell');
 const backend = path.join(work, 'backend');
 await mkdir(path.join(payload, 'desktop'), { recursive: true });
 await mkdir(path.join(payload, 'shared'));
-for (const name of ['main.cjs', 'service.cjs', 'loading.html'])
+for (const name of [
+  'main.cjs',
+  'service.cjs',
+  'loading.html',
+  'shell-update.cjs',
+  'shell-update-helper.cjs',
+])
   await cp(path.join(source, 'desktop', name), path.join(payload, 'desktop', name));
 await cp(path.join(source, 'shared/brand.json'), path.join(payload, 'shared/brand.json'));
+for (const name of ['release-trust.json', 'desktop-update-security.cjs'])
+  await cp(path.join(source, 'shared', name), path.join(payload, 'shared', name));
 await cp(path.join(source, 'LICENSE'), path.join(payload, 'LICENSE'));
 const { devDependencies, ...shellPackage } = appPackage;
 await writeFile(
@@ -173,16 +181,18 @@ const result = packages[0];
 await cp(path.join(source, 'LICENSE'), path.join(result, 'LICENSE-project.txt'));
 await writeFile(
   path.join(result, '桌面版使用说明.txt'),
-  `${brand.nameZh} ${brand.nameEn} ${appPackage.version}\n\n双击 ${brand.nameEn}.exe 打开独立窗口，无需 CMD、系统浏览器或联网安装运行依赖。\n请完整解压到可写目录，不能只拷贝 EXE；本目录的资源和 DLL 必须一同保留。\n首次启动会在本目录 workspace 中准备工作台，数据位于其固定 dataDir（新安装默认 workspace/data）。\n已有 CMD 版请从“工作台 → 打开已有工作台”选择原程序根目录，不能只选 data；原 .worldloom/current.json 的数据路径优先。\n桌面版自己启动的服务仅监听本机，关闭时正常停止；附接外部 CMD 服务时关闭窗口不会停止它。\n更新/迁移前创建并验证完整私有备份；不要删除 workspace/data/.worldloom，也不要重新初始化来替代路径核对。\n首次复制运行组件可能需要片刻。应用未做商业代码签名，Windows 可能提示未知发布者。\n此版本是额外下载项，原 CMD/服务器版继续保留。\n`,
+  `${brand.nameZh} ${brand.nameEn} ${appPackage.version}\n\n双击 ${brand.nameEn}.exe 打开独立窗口，无需 CMD、系统浏览器或联网安装运行依赖。\n请完整解压到可写目录，不能只拷贝 EXE；本目录的资源和 DLL 必须一同保留。\n首次启动会在本目录 workspace 中准备工作台，数据位于其固定 dataDir（新安装默认 workspace/data）。\n已有 CMD 版请从“工作台 → 打开已有工作台”选择原程序根目录，不能只选 data；原 .worldloom/current.json 的数据路径优先。\n桌面版自己启动的服务仅监听本机，关闭时正常停止；附接外部 CMD 服务时关闭窗口不会停止它。\n帮助 → 检查桌面程序更新…可自动下载、官方验签、完整备份、退出并重开新版。原 EXE 保留为固定入口，实际版本见帮助 → 关于。\n后端另在工作台设置更新；旧EXE须先手动换到beta.19一次才有原生更新菜单。\n更新/迁移前创建并验证完整私有备份；不要删除 workspace/data/.worldloom，也不要重新初始化来替代路径核对。\n首次复制运行组件可能需要片刻。应用未做商业代码签名，Windows 可能提示未知发布者。\n此版本是额外下载项，原 CMD/服务器版继续保留。\n`,
 );
 const shellHashes = Object.fromEntries(
   await Promise.all(
-    ['main.cjs', 'service.cjs', 'loading.html'].map(async (name) => [
-      name,
-      createHash('sha256')
-        .update(await readFile(path.join(source, 'desktop', name)))
-        .digest('hex'),
-    ]),
+    ['main.cjs', 'service.cjs', 'loading.html', 'shell-update.cjs', 'shell-update-helper.cjs'].map(
+      async (name) => [
+        name,
+        createHash('sha256')
+          .update(await readFile(path.join(source, 'desktop', name)))
+          .digest('hex'),
+      ],
+    ),
   ),
 );
 const report = {
@@ -200,3 +210,4 @@ await writeFile(
   JSON.stringify(report, null, 2),
 );
 console.log(`Desktop application prepared: ${path.relative(root, result)}`);
+

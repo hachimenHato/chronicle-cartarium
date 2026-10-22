@@ -129,6 +129,7 @@ interface Address {
 
 /** Dependency injection is for isolated tests; it never relaxes URL/IP checks. */
 export interface UpdateDownloadOptions {
+  fileLimit?: number;
   lookup?: (hostname: string) => Promise<readonly Address[]>;
   request?: (
     options: https.RequestOptions,
@@ -154,6 +155,9 @@ function contentLength(response: IncomingMessage): number | undefined {
 }
 
 export function createUpdateDownloader(options: UpdateDownloadOptions = {}) {
+  const fileLimit = options.fileLimit ?? FILE_LIMIT;
+  if (!Number.isSafeInteger(fileLimit) || fileLimit < 1 || fileLimit > 512 * 1024 ** 2)
+    throw new Error('更新下载容量上限无效');
   const lookup =
     options.lookup ?? ((hostname) => dnsLookup(hostname, { all: true, verbatim: true }));
   const request = options.request ?? ((settings, callback) => https.request(settings, callback));
@@ -339,7 +343,7 @@ export function createUpdateDownloader(options: UpdateDownloadOptions = {}) {
     if (
       !Number.isSafeInteger(expected.bytes) ||
       expected.bytes <= 0 ||
-      expected.bytes > FILE_LIMIT ||
+      expected.bytes > fileLimit ||
       !/^[a-fA-F0-9]{64}$/.test(expected.sha256)
     )
       throw new Error('更新包大小或校验信息无效');
@@ -357,7 +361,7 @@ export function createUpdateDownloader(options: UpdateDownloadOptions = {}) {
         const verify = new Transform({
           transform(chunk: Buffer, _encoding, callback) {
             received += chunk.length;
-            if (received > expected.bytes || received > FILE_LIMIT) {
+            if (received > expected.bytes || received > fileLimit) {
               callback(new Error('更新包实际大小超过发行信息'));
               return;
             }

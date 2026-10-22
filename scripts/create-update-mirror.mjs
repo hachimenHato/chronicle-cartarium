@@ -47,21 +47,40 @@ function publicRelease(value) {
   requireValue(Array.isArray(value.assets) && value.assets.length <= 100, '发行附件清单格式无效。');
   const names = new Set();
   const assets = [];
+  const desktopZip = `chronicle-cartarium-${version}-windows-desktop-x64.zip`;
+  const desktopMetadata = `chronicle-cartarium-${version}-windows-desktop-x64.update.json`;
+  const hasDesktopMetadata = value.assets.some((asset) => asset?.name === desktopMetadata);
+  if (hasDesktopMetadata)
+    requireValue(
+      value.assets.some((asset) => asset?.name === desktopZip),
+      '桌面签名描述缺少对应ZIP。',
+    );
   for (const asset of value.assets) {
     requireValue(asset && typeof asset === 'object' && !Array.isArray(asset), '发行附件格式无效。');
-    if (typeof asset.name !== 'string' || !asset.name.endsWith('.ccupdate')) continue;
+    if (typeof asset.name !== 'string') continue;
+    const desktop =
+      asset.name === desktopMetadata || (asset.name === desktopZip && hasDesktopMetadata);
+    if (!asset.name.endsWith('.ccupdate') && !desktop) continue;
     const prefix = `chronicle-cartarium-${version}-`;
     requireValue(
-      asset.name.startsWith(prefix) &&
-        /^(?:win|linux|darwin)-(?:x64|arm64)\.ccupdate$/.test(asset.name.slice(prefix.length)),
+      desktop ||
+        (asset.name.startsWith(prefix) &&
+          /^(?:win|linux|darwin)-(?:x64|arm64)\.ccupdate$/.test(asset.name.slice(prefix.length))),
       '更新包名称不符合系统与架构规范。',
     );
     requireValue(!names.has(asset.name.toLowerCase()), '同一发行包含重复更新包。');
     names.add(asset.name.toLowerCase());
     requireValue(asset.state === 'uploaded', '更新包尚未上传完成。');
     requireValue(
-      Number.isSafeInteger(asset.size) && asset.size > 0 && asset.size <= MAX_PACKAGE,
-      '更新包大小无效或超过128MiB。',
+      Number.isSafeInteger(asset.size) &&
+        asset.size > 0 &&
+        asset.size <=
+          (asset.name === desktopZip
+            ? 512 * 1024 ** 2
+            : asset.name === desktopMetadata
+              ? MAX_CATALOG
+              : MAX_PACKAGE),
+      '更新包大小无效或超过容量上限。',
     );
     requireValue(
       typeof asset.digest === 'string' && /^sha256:[a-f0-9]{64}$/.test(asset.digest),
