@@ -3,6 +3,7 @@ import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { createUpdateDownloader, readUpdateJson } from '../server/update-download';
+import { formatCosDiagnostic } from './lib/cos-diagnostics';
 
 const REPOSITORY = 'https://github.com/hachimenHato/chronicle-cartarium';
 const RELEASE_API = 'https://api.github.com/repos/hachimenHato/chronicle-cartarium/releases/tags/';
@@ -169,7 +170,7 @@ export async function runCosCli(values = process.argv.slice(2)): Promise<void> {
       });
       console.log('COS 更新镜像已发布，公开下载校验通过。');
     }
-  } catch {
+  } catch (error) {
     // SDK and HTTP errors can contain signed URLs, authorization headers, or
     // SecretId. Never log the error object, message, stack, URL, or environment.
     console.error(
@@ -179,6 +180,8 @@ export async function runCosCli(values = process.argv.slice(2)): Promise<void> {
           ? '公开更新包准备失败（COS_PREPARE）。请检查公开发行标签、GitHub 网络与全新输出目录。'
           : 'COS 发布或公开下载校验失败（COS_PUBLISH）。请检查专用权限、存储桶、HTTPS 域名与网络；敏感错误详情未输出。',
     );
+    const diagnostic = formatCosDiagnostic(error);
+    if (diagnostic) console.error(`诊断代码：${diagnostic}`);
     process.exitCode = 1;
   }
 }

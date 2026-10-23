@@ -9,17 +9,14 @@ import { releaseManifestSchema, compareVersions } from '../../server/release-pac
 import { releasePublicKeys } from '../../shared/release-trust';
 import { validateUpdateUrl } from '../../server/update-download';
 import type { PublicMirrorRelease } from '../create-update-mirror.mjs';
+import { CosPublishError } from './cos-diagnostics';
+export { CosPublishError } from './cos-diagnostics';
 const require = createRequire(import.meta.url);
 // The builder strips all fields except the fixed public GitHub release contract.
 const { publicRelease } = await import('../create-update-mirror.mjs');
 const { isPrivateReleasePath } = await import('../release-security.mjs');
 const { digest, verifyDesktopManifest } = require('../../shared/desktop-update-security.cjs');
 const LIMIT = 1024 ** 2;
-export class CosPublishError extends Error {
-  constructor(public readonly code: string) {
-    super(`COS 镜像发布未完成（${code}）。请查看状态与操作指引，不要重置现有镜像或资料。`);
-  }
-}
 function need(value: unknown, code: string): asserts value {
   if (!value) throw new CosPublishError(code);
 }
@@ -363,21 +360,42 @@ export async function publishCosMirror({
     publicBaseUrl: config.publicBaseUrl,
   };
 }
-export function createCosStore(config: CosConfig, env: NodeJS.ProcessEnv): CosStore {
+export interface CosSdkClient {
+  headObject(params: Record<string, unknown>): Promise<any>;
+  getObject(params: Record<string, unknown>): Promise<any>;
+  getBucketVersioning(params: Record<string, unknown>): Promise<any>;
+  putObject(params: Record<string, unknown>): Promise<any>;
+}
+export function createCosStore(
+  config: CosConfig,
+  env: NodeJS.ProcessEnv,
+  client?: CosSdkClient,
+): CosStore {
   need(env.TENCENT_COS_SECRET_ID && env.TENCENT_COS_SECRET_KEY, 'CREDENTIALS');
-  const COS = require('../../tools/cos-publisher/node_modules/cos-nodejs-sdk-v5');
-  const cos = new COS({
-    SecretId: env.TENCENT_COS_SECRET_ID,
-    SecretKey: env.TENCENT_COS_SECRET_KEY,
-    SecurityToken: env.TENCENT_COS_SESSION_TOKEN || undefined,
-    Protocol: 'https:',
-    Timeout: 600000,
-    MaxRetryTimes: 2,
-  });
+  // Injection is for adapter regression tests; the CLI always uses the isolated official SDK.
+  const cos: CosSdkClient =
+    client ??
+    (() => {
+      let COS;
+      try {
+        COS = require('../../tools/cos-publisher/node_modules/cos-nodejs-sdk-v5');
+      } catch {
+        throw new CosPublishError('COS_SDK');
+      }
+      return new COS({
+        SecretId: env.TENCENT_COS_SECRET_ID,
+        SecretKey: env.TENCENT_COS_SECRET_KEY,
+        SecurityToken: env.TENCENT_COS_SESSION_TOKEN || undefined,
+        Protocol: 'https:',
+        Timeout: 600000,
+      });
+    })();
   const base = { Bucket: config.bucket, Region: config.region };
   const missing = (error: any) =>
     error?.statusCode === 404 &&
-    ['NoSuchKey', 'NotFound', 'NoSuchObject', undefined].includes(error?.code);
+    ['NoSuchKey', 'NotFound', 'NoSuchObject', '404', undefined].includes(
+      error?.error?.Code ?? error?.code,
+    );
   async function head(key: string) {
     try {
       const r = await cos.headObject({ ...base, Key: key });
@@ -386,7 +404,8 @@ export function createCosStore(config: CosConfig, env: NodeJS.ProcessEnv): CosSt
       return { bytes };
     } catch (error) {
       if (missing(error)) return undefined;
-      throw new CosPublishError('COS_HEAD');
+      if (error instanceof CosPublishError) throw error;
+      throw new CosPublishError('COS_HEAD', error);
     }
   }
   return {
@@ -394,8 +413,8 @@ export function createCosStore(config: CosConfig, env: NodeJS.ProcessEnv): CosSt
       try {
         const r = await cos.getBucketVersioning(base);
         return r.VersioningConfiguration?.Status || r.Status || undefined;
-      } catch {
-        throw new CosPublishError('COS_BUCKET');
+      } catch (error) {
+        throw new CosPublishError('COS_BUCKET', error);
       }
     },
     head,
@@ -408,8 +427,9 @@ export function createCosStore(config: CosConfig, env: NodeJS.ProcessEnv): CosSt
         const body = Buffer.isBuffer(r.Body) ? r.Body : Buffer.from(r.Body);
         need(body.length <= LIMIT && body.length === info.bytes, 'REMOTE_CATALOG_SIZE');
         return body;
-      } catch {
-        throw new CosPublishError('COS_READ');
+      } catch (error) {
+        if (error instanceof CosPublishError) throw error;
+        throw new CosPublishError('COS_READ', error);
       }
     },
     async put(input) {
@@ -431,8 +451,8 @@ export function createCosStore(config: CosConfig, env: NodeJS.ProcessEnv): CosSt
             ...(input.immutable ? { 'x-cos-forbid-overwrite': 'true' } : {}),
           },
         });
-      } catch {
-        throw new CosPublishError('COS_WRITE');
+      } catch (error) {
+        throw new CosPublishError('COS_WRITE', error);
       }
     },
   };
