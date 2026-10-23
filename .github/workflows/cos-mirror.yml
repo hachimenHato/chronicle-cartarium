@@ -24,7 +24,9 @@ jobs:
     if: github.repository == 'hachimenHato/chronicle-cartarium' && vars.COS_ENABLED == 'true'
     environment: cos-production
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # First sync transfers all platform packages and anonymously reads them back.
+    # Cross-border throughput can be slow; retain verification and one writer.
+    timeout-minutes: 120
     steps:
       # Use the maintained publisher on main even for older Release tags. Never
       # execute source supplied by an arbitrary workflow_dispatch tag or PR.

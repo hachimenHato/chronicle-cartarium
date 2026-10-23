@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { createUpdateDownloader, readUpdateJson } from '../server/update-download';
 import { formatCosDiagnostic } from './lib/cos-diagnostics';
+import { createCosProgressLogger } from './lib/cos-progress';
 
 const REPOSITORY = 'https://github.com/hachimenHato/chronicle-cartarium';
 const RELEASE_API = 'https://api.github.com/repos/hachimenHato/chronicle-cartarium/releases/tags/';
@@ -167,6 +168,7 @@ export async function runCosCli(values = process.argv.slice(2)): Promise<void> {
         config,
         store,
         verifyPublic: createPublicVerifier(),
+        onProgress: createCosProgressLogger(),
       });
       console.log('COS 更新镜像已发布，公开下载校验通过。');
     }

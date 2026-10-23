@@ -10,6 +10,7 @@ import { releasePublicKeys } from '../../shared/release-trust';
 import { validateUpdateUrl } from '../../server/update-download';
 import type { PublicMirrorRelease } from '../create-update-mirror.mjs';
 import { CosPublishError } from './cos-diagnostics';
+import type { CosProgressEvent } from './cos-progress';
 export { CosPublishError } from './cos-diagnostics';
 const require = createRequire(import.meta.url);
 // The builder strips all fields except the fixed public GitHub release contract.
@@ -45,6 +46,7 @@ export interface CosStore {
     md5: string;
     sha256: string;
     immutable: boolean;
+    onProgress?: (progress: { loaded?: unknown }) => void;
   }): Promise<void>;
 }
 export function loadCosConfig(env: NodeJS.ProcessEnv): CosConfig {
@@ -279,16 +281,21 @@ export async function publishCosMirror({
   store,
   verifyPublic,
   dependencies,
+  onProgress,
 }: {
   directory: string;
   config: CosConfig;
   store: CosStore;
   verifyPublic: (file: MirrorFile, url: string) => Promise<void>;
   dependencies?: { plan?: typeof planCosMirror };
+  onProgress?: (progress: CosProgressEvent) => void;
 }) {
+  onProgress?.({ stage: 'verify' });
   const plan = await (dependencies?.plan || planCosMirror)(directory);
   // This prefix is owned by one serialized workflow. A versioned bucket would ignore forbid-overwrite.
+  onProgress?.({ stage: 'bucket' });
   need(!(await store.versioning()), 'BUCKET_VERSIONING');
+  onProgress?.({ stage: 'read-catalog' });
   const key = config.prefix + '/releases.json',
     previous = await store.catalog(key),
     beforeHash = previous ? createHash('sha256').update(previous).digest('hex') : undefined;
@@ -306,7 +313,9 @@ export async function publishCosMirror({
   need(rows.length <= 100, 'CATALOG_COUNT');
   const body = Buffer.from(JSON.stringify(rows, null, 2) + '\n');
   need(body.length <= LIMIT, 'CATALOG_SIZE');
-  for (const file of plan.files) {
+  for (const [index, file] of plan.files.entries()) {
+    const counts = { fileIndex: index + 1, fileCount: plan.files.length, bytes: file.bytes };
+    onProgress?.({ stage: 'file-start', ...counts });
     const objectKey = config.prefix + '/' + file.relative,
       existing = await store.head(objectKey);
     if (existing) need(existing.bytes === file.bytes, 'EXISTING_OBJECT_CHANGED');
@@ -318,15 +327,31 @@ export async function publishCosMirror({
         md5: file.md5,
         sha256: file.sha256,
         immutable: true,
+        ...(onProgress
+          ? {
+              onProgress: (progress: { loaded?: unknown }) => {
+                if (typeof progress?.loaded !== 'number' || !Number.isFinite(progress.loaded))
+                  return;
+                onProgress({
+                  stage: 'upload-progress',
+                  ...counts,
+                  loaded: Math.min(file.bytes, Math.max(0, Math.floor(progress.loaded))),
+                });
+              },
+            }
+          : {}),
       });
     // Anonymous HTTPS readback verifies exact bytes, readability, DNS safety and SHA before advertising.
+    onProgress?.({ stage: 'file-readback', ...counts });
     await verifyPublic(file, config.publicBaseUrl + '/' + file.relative);
+    onProgress?.({ stage: 'file-verified', ...counts });
   }
   const now = await store.catalog(key);
   need(
     (now ? createHash('sha256').update(now).digest('hex') : undefined) === beforeHash,
     'CONCURRENT_PUBLISH',
   );
+  onProgress?.({ stage: 'commit-catalog' });
   if (!previous?.equals(body)) {
     try {
       await store.put({
@@ -354,6 +379,7 @@ export async function publishCosMirror({
     },
     config.publicBaseUrl + '/releases.json',
   );
+  onProgress?.({ stage: 'done', fileCount: plan.files.length });
   return {
     packages: plan.files.length,
     releases: rows.length,
@@ -450,6 +476,7 @@ export function createCosStore(
             'x-cos-meta-sha256': input.sha256,
             ...(input.immutable ? { 'x-cos-forbid-overwrite': 'true' } : {}),
           },
+          ...(input.onProgress ? { onProgress: input.onProgress } : {}),
         });
       } catch (error) {
         throw new CosPublishError('COS_WRITE', error);
