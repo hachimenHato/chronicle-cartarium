@@ -19,7 +19,7 @@ async function sha256(filename) {
   return hash.digest('hex');
 }
 
-function publicRelease(value) {
+export function publicRelease(value) {
   requireValue(
     value && typeof value === 'object' && !Array.isArray(value),
     '发行清单包含无效项目。',

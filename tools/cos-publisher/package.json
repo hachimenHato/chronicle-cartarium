@@ -1,0 +1,13 @@
+{
+  "name": "chronicle-cartarium-cos-publisher",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Maintainer-only COS transport; never installed by the creative workbench",
+  "license": "0BSD",
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "3.0.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

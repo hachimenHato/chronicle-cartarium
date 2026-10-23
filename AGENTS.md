@@ -12,3 +12,4 @@
 10. 上传资源位于 `DATA_DIR/uploads`，默认 `data/uploads`。JSON/Markdown 不含图片原始文件，迁移时同时备份目录。
 11. 受管理实例由安装根 `scripts/launch.mjs` 启动；`.worldloom/current.json` 的绝对dataDir优先于环境变量。程序更新先排空写入、完整备份并验证，完成记录持久化后不允许恢复升级前快照覆盖新版写入。未知数据格式在写入前拒绝。完整恢复只使用全新目录/全新项目库，保留原数据；Linux/Docker未实机验证的限制需如实记录。
 12. 正式名称“编年图志 Chronicle Cartarium”，品牌唯一源shared/brand.json。旧数据路径/格式标记/数据库与卷/签名密钥/控制别名必须保持兼容，详细清单见docs/branding-compatibility.md；不能为“清除旧名称”全局替换私有或历史技术标识。
+13. 腾讯云 COS 凭据仅保存在 GitHub Environment Secrets（或本机被忽略的私有环境文件），只注入发布器的最终上传步骤。绝不能写入前端/VITE_变量、源码、文档、应用设置、构建参数、日志或发行附件。维护 SDK 单独位于 tools/cos-publisher，不进入用户软件或镜像。上传限官方已签名更新文件及净化清单，先匿名验证各包再发布清单，不删除或覆盖不同的既有版本对象；新专用桶不得启用版本控制。实际桶未建、凭据未配置前，不得声称 COS 已部署或上传通过。

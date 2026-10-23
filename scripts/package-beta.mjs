@@ -1,6 +1,11 @@
 import { cp, mkdir, readFile, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
 import brand from '../shared/brand.json' with { type: 'json' };
+import {
+  assertPublicReleaseTree,
+  createReleaseCopyFilter,
+  isPrivateReleasePath,
+} from './release-security.mjs';
 const root = process.cwd();
 const packageInfo = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 if (!/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(packageInfo.version))
@@ -44,6 +49,9 @@ const files = [
   'docker-compose.image.yml',
 ];
 await access(path.join(root, 'dist', 'index.html'));
+// Check only the public allow-list; do not inspect the installation's data or credentials.
+await assertPublicReleaseTree(root, { entries: files });
+const publicSourceFilter = createReleaseCopyFilter(root);
 await mkdir(path.dirname(destination), { recursive: true });
 await mkdir(destination);
 for (const file of files)
@@ -51,21 +59,8 @@ for (const file of files)
     recursive: true,
     force: true,
     filter: (source) => {
-      const name = path.basename(source);
       return (
-        ![
-          'node_modules',
-          '.desktop',
-          'workspace',
-          '.env',
-          'mysql.txt',
-          'installation.json',
-          'users.json',
-          '.npmrc',
-          'runner.key',
-        ].includes(name) &&
-        !(name.startsWith('.env.') && name !== '.env.example') &&
-        !name.endsWith('.pem') &&
+        publicSourceFilter(source) &&
         path.resolve(source) !==
           path.resolve(process.env.RELEASE_SIGNING_KEY || '.runtime/release-signing-private.pem')
       );
@@ -84,10 +79,7 @@ if (process.platform === 'win32') {
   await cp(process.execPath, path.join(runtime, 'node.exe'));
   await cp(npmDirectory, path.join(runtime, 'node_modules', 'npm'), {
     recursive: true,
-    filter: (source) =>
-      !['.env', '.npmrc', 'mysql.txt', 'installation.json', 'users.json'].includes(
-        path.basename(source),
-      ),
+    filter: (source) => !isPrivateReleasePath(path.relative(npmDirectory, source)),
   });
   let licenseText;
   for (let attempt = 0; attempt < 3; attempt++) {

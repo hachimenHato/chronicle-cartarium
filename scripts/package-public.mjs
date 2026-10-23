@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { create, x, t } from 'tar';
+import { assertPublicReleaseTree, createReleaseCopyFilter } from './release-security.mjs';
 
 const root = process.cwd();
 const source = path.resolve(process.argv[2] || '');
@@ -14,6 +15,8 @@ if (
 )
   throw new Error('Use isolated publishing paths');
 const version = JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8')).version;
+await assertPublicReleaseTree(source);
+const publicSourceFilter = createReleaseCopyFilter(source);
 await lstat(path.join(source, 'dist/index.html'));
 await mkdir(output);
 const nodeVersion = process.env.PUBLIC_NODE_VERSION || 'v22.23.3';
@@ -63,8 +66,7 @@ for (const target of targets) {
   const directory = path.join(output, name);
   await cp(source, directory, {
     recursive: true,
-    filter: (filename) =>
-      !['node_modules', '.git', '.runtime', '.worldloom', 'data'].includes(path.basename(filename)),
+    filter: publicSourceFilter,
   });
   const extraction = path.join(output, 'extract-' + target);
   await mkdir(extraction);

@@ -4,6 +4,11 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import {
+  assertPublicReleaseTree,
+  createReleaseCopyFilter,
+  isPrivateReleasePath,
+} from './release-security.mjs';
 const root = process.cwd();
 const source = path.resolve(process.argv[2] || '');
 const runtimeSource = path.resolve(process.argv[3] || '');
@@ -21,6 +26,8 @@ for (const name of ['.env', 'data', '.worldloom', 'mysql.txt']) {
   )
     throw new Error('Private source directory refused.');
 }
+await assertPublicReleaseTree(source);
+const publicSourceFilter = createReleaseCopyFilter(source);
 await access(path.join(source, 'dist/index.html'));
 await access(path.join(runtimeSource, 'node.exe'));
 await access(path.join(runtimeSource, 'node_modules/npm/bin/npm-cli.js'));
@@ -87,7 +94,10 @@ for (const name of [
   'DEPENDENCY_LICENSES.md',
   'DEPENDENCIES.json',
 ])
-  await cp(path.join(source, name), path.join(backend, name), { recursive: true });
+  await cp(path.join(source, name), path.join(backend, name), {
+    recursive: true,
+    filter: publicSourceFilter,
+  });
 await mkdir(path.join(backend, 'runtime/node_modules'), { recursive: true });
 await cp(path.join(runtimeSource, 'node.exe'), path.join(backend, 'runtime/node.exe'));
 await cp(
@@ -96,9 +106,7 @@ await cp(
   {
     recursive: true,
     filter: (filename) =>
-      !['.npmrc', '.env', 'mysql.txt', 'installation.json', 'users.json', 'runner.key'].includes(
-        path.basename(filename),
-      ),
+      !isPrivateReleasePath(path.relative(path.join(runtimeSource, 'node_modules/npm'), filename)),
   },
 );
 const nodeLicense = await access(path.join(runtimeSource, 'LICENSE')).then(
@@ -210,4 +218,3 @@ await writeFile(
   JSON.stringify(report, null, 2),
 );
 console.log(`Desktop application prepared: ${path.relative(root, result)}`);
-

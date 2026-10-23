@@ -1,0 +1,59 @@
+name: 同步腾讯云更新镜像
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '已公开的官方发行标签，例如 v0.2.0-beta.19'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One writer for the shared releases.json. Never cancel a publishing operation
+# halfway through; version files are verified before the catalog is committed.
+concurrency:
+  group: cos-updates
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'hachimenHato/chronicle-cartarium' && vars.COS_ENABLED == 'true'
+    environment: cos-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # Use the maintained publisher on main even for older Release tags. Never
+      # execute source supplied by an arbitrary workflow_dispatch tag or PR.
+      - name: Check out the maintained publisher
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.23.3'
+      - name: Install fixed dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Install the isolated official COS SDK without lifecycle scripts
+        run: npm ci --prefix tools/cos-publisher --ignore-scripts
+      - name: Prepare only the official signed update downloads
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: node --import tsx scripts/publish-cos-mirror.ts prepare --tag "$RELEASE_TAG" --output "$RUNNER_TEMP/chronicle-cos"
+      # Credentials exist in this step only. Do not add artifact/cache uploads,
+      # debug output, builds, signing or package generation after this step.
+      - name: Upload and verify the public mirror
+        env:
+          TENCENT_COS_SECRET_ID: ${{ secrets.TENCENT_COS_SECRET_ID }}
+          TENCENT_COS_SECRET_KEY: ${{ secrets.TENCENT_COS_SECRET_KEY }}
+          TENCENT_COS_SESSION_TOKEN: ${{ secrets.TENCENT_COS_SESSION_TOKEN }}
+          COS_BUCKET: ${{ vars.COS_BUCKET }}
+          COS_REGION: ${{ vars.COS_REGION }}
+          COS_PREFIX: ${{ vars.COS_PREFIX }}
+          COS_PUBLIC_BASE_URL: ${{ vars.COS_PUBLIC_BASE_URL }}
+        run: node --import tsx scripts/publish-cos-mirror.ts publish --directory "$RUNNER_TEMP/chronicle-cos/mirror"

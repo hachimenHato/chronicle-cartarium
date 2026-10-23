@@ -4,7 +4,7 @@
 
 通过浏览器使用，部署在自己的电脑或服务器。首次安装明确选择 **本地 SQLite** 或 **MySQL**，本地模式无需另装数据库。中文界面，目前为 **0.2.0-beta.19 公开测试版**。
 
-[下载发行版](https://github.com/hachimenHato/chronicle-cartarium/releases) · [安装与部署](docs/installation.md) · **[各平台更新教程](docs/update-guide.md)** · [更新与数据保护](docs/update-strategy.md) · [问题反馈](https://github.com/hachimenHato/chronicle-cartarium/issues)
+[下载发行版](https://github.com/hachimenHato/chronicle-cartarium/releases) · [安装与部署](docs/installation.md) · **[各平台更新教程](docs/update-guide.md)** · [腾讯云 COS 更新镜像](docs/tencent-cos.md) · [更新与数据保护](docs/update-strategy.md) · [问题反馈](https://github.com/hachimenHato/chronicle-cartarium/issues)
 
 <img src="public/covers/moon-town.png" alt="应用自带的月夜城镇封面插画，并非地图生成截图" width="280">
 
@@ -102,6 +102,8 @@ docker compose -f docker-compose.image.yml up -d
 | Docker                 | 宿主机保留原项目、卷和配置后更换镜像；不能用网页 `.ccupdate` 替换容器                              |
 
 逐步操作见 **[各平台更新教程](docs/update-guide.md)**，保护机制和实测边界见[更新说明](docs/update-strategy.md)。已有数据却出现安装向导时先检查路径，**不要重新初始化**。
+
+维护者可按[腾讯云 COS 镜像教程](docs/tencent-cos.md)配置专用桶、域名和 GitHub Secrets，使公开 Release 发布后自动同步签名更新包。工具只上传白名单，版本文件禁止覆盖，清单最后发布；应用和下载包不需要腾讯云密钥。配置与实际下载验证完成前，不代表已部署可用的国内镜像。
 
 ## 当前边界
 
