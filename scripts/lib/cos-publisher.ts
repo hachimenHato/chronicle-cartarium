@@ -282,6 +282,7 @@ export async function publishCosMirror({
   verifyPublic,
   dependencies,
   onProgress,
+  concurrency = 1,
 }: {
   directory: string;
   config: CosConfig;
@@ -289,7 +290,12 @@ export async function publishCosMirror({
   verifyPublic: (file: MirrorFile, url: string) => Promise<void>;
   dependencies?: { plan?: typeof planCosMirror };
   onProgress?: (progress: CosProgressEvent) => void;
+  concurrency?: number;
 }) {
+  need(
+    Number.isSafeInteger(concurrency) && concurrency >= 1 && concurrency <= 3,
+    'COS_CONCURRENCY',
+  );
   onProgress?.({ stage: 'verify' });
   const plan = await (dependencies?.plan || planCosMirror)(directory);
   // This prefix is owned by one serialized workflow. A versioned bucket would ignore forbid-overwrite.
@@ -313,7 +319,7 @@ export async function publishCosMirror({
   need(rows.length <= 100, 'CATALOG_COUNT');
   const body = Buffer.from(JSON.stringify(rows, null, 2) + '\n');
   need(body.length <= LIMIT, 'CATALOG_SIZE');
-  for (const [index, file] of plan.files.entries()) {
+  async function publishFile(index: number, file: MirrorFile) {
     const counts = { fileIndex: index + 1, fileCount: plan.files.length, bytes: file.bytes };
     onProgress?.({ stage: 'file-start', ...counts });
     const objectKey = config.prefix + '/' + file.relative,
@@ -346,6 +352,29 @@ export async function publishCosMirror({
     await verifyPublic(file, config.publicBaseUrl + '/' + file.relative);
     onProgress?.({ stage: 'file-verified', ...counts });
   }
+  let nextFile = 0;
+  let failed = false;
+  let firstError: unknown;
+  async function worker() {
+    while (!failed && nextFile < plan.files.length) {
+      // Assignment is synchronous, so each file belongs to exactly one worker.
+      const index = nextFile++;
+      try {
+        await publishFile(index, plan.files[index]);
+      } catch (error) {
+        if (!failed) {
+          failed = true;
+          firstError = error;
+        }
+        return;
+      }
+    }
+  }
+  // A failure stops new files but does not abandon writes/readbacks already in
+  // flight. Wait for every worker before returning the first error; none of the
+  // catalog reads or commits below may run unless all files passed verification.
+  await Promise.all(Array.from({ length: Math.min(concurrency, plan.files.length) }, worker));
+  if (failed) throw firstError;
   const now = await store.catalog(key);
   need(
     (now ? createHash('sha256').update(now).digest('hex') : undefined) === beforeHash,
@@ -396,26 +425,40 @@ export function createCosStore(
   config: CosConfig,
   env: NodeJS.ProcessEnv,
   client?: CosSdkClient,
+  uploadClient?: CosSdkClient,
 ): CosStore {
+  const accelerate = env.COS_UPLOAD_ACCELERATE;
+  need(
+    accelerate === undefined ||
+      accelerate === '' ||
+      accelerate === 'false' ||
+      accelerate === 'true',
+    'COS_ACCELERATE',
+  );
   need(env.TENCENT_COS_SECRET_ID && env.TENCENT_COS_SECRET_KEY, 'CREDENTIALS');
-  // Injection is for adapter regression tests; the CLI always uses the isolated official SDK.
-  const cos: CosSdkClient =
-    client ??
-    (() => {
-      let COS;
-      try {
-        COS = require('../../tools/cos-publisher/node_modules/cos-nodejs-sdk-v5');
-      } catch {
-        throw new CosPublishError('COS_SDK');
-      }
-      return new COS({
-        SecretId: env.TENCENT_COS_SECRET_ID,
-        SecretKey: env.TENCENT_COS_SECRET_KEY,
-        SecurityToken: env.TENCENT_COS_SESSION_TOKEN || undefined,
-        Protocol: 'https:',
-        Timeout: 600000,
-      });
-    })();
+  function officialClient(useAccelerate: boolean): CosSdkClient {
+    let COS;
+    try {
+      COS = require('../../tools/cos-publisher/node_modules/cos-nodejs-sdk-v5');
+    } catch {
+      throw new CosPublishError('COS_SDK');
+    }
+    return new COS({
+      SecretId: env.TENCENT_COS_SECRET_ID,
+      SecretKey: env.TENCENT_COS_SECRET_KEY,
+      SecurityToken: env.TENCENT_COS_SESSION_TOKEN || undefined,
+      Protocol: 'https:',
+      Timeout: 600000,
+      UseAccelerate: useAccelerate,
+    });
+  }
+  // Injection is for adapter regression tests; the CLI supplies neither client.
+  // SDK acceleration is client-wide and does not support bucket configuration
+  // APIs. Keep all reads/checks on the ordinary endpoint; only explicit opt-in
+  // PUT operations use a separate client. Enabling the paid bucket feature is
+  // always a maintainer action in COS, never something this publisher changes.
+  const cos = client ?? officialClient(false);
+  const uploadCos = accelerate === 'true' ? (uploadClient ?? officialClient(true)) : cos;
   const base = { Bucket: config.bucket, Region: config.region };
   const missing = (error: any) =>
     error?.statusCode === 404 &&
@@ -460,7 +503,7 @@ export function createCosStore(
     },
     async put(input) {
       try {
-        await cos.putObject({
+        await uploadCos.putObject({
           ...base,
           Key: input.key,
           Body: input.body || createReadStream(input.file!),

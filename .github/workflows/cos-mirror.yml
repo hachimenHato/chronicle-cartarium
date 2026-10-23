@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     # First sync transfers all platform packages and anonymously reads them back.
     # Cross-border throughput can be slow; retain verification and one writer.
-    timeout-minutes: 120
+    timeout-minutes: 360
     steps:
       # Use the maintained publisher on main even for older Release tags. Never
       # execute source supplied by an arbitrary workflow_dispatch tag or PR.
@@ -58,4 +58,5 @@ jobs:
           COS_REGION: ${{ vars.COS_REGION }}
           COS_PREFIX: ${{ vars.COS_PREFIX }}
           COS_PUBLIC_BASE_URL: ${{ vars.COS_PUBLIC_BASE_URL }}
+          COS_UPLOAD_ACCELERATE: ${{ vars.COS_UPLOAD_ACCELERATE }}
         run: node --import tsx scripts/publish-cos-mirror.ts publish --directory "$RUNNER_TEMP/chronicle-cos/mirror"

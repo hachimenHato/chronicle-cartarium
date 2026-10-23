@@ -163,12 +163,15 @@ export async function runCosCli(values = process.argv.slice(2)): Promise<void> {
         await import('./lib/cos-publisher');
       const config = loadCosConfig(process.env);
       const store = await createCosStore(config, process.env);
+      if (process.env.COS_UPLOAD_ACCELERATE === 'true')
+        console.log('上传使用腾讯云全球加速；存储桶查询和公开下载继续使用普通线路。');
       await publishCosMirror({
         directory: options.directory,
         config,
         store,
         verifyPublic: createPublicVerifier(),
         onProgress: createCosProgressLogger(),
+        concurrency: 3,
       });
       console.log('COS 更新镜像已发布，公开下载校验通过。');
     }
@@ -189,7 +192,13 @@ export async function runCosCli(values = process.argv.slice(2)): Promise<void> {
 }
 
 export function createPublicVerifier() {
-  const download = createUpdateDownloader({ fileLimit: MAX_FILE }).downloadUpdateFile;
+  // This is maintainer-side anonymous readback across borders, not the app's
+  // normal update timeout. Slow active transfers may continue; connect/header
+  // and idle guards remain unchanged, as do exact length and SHA verification.
+  const download = createUpdateDownloader({
+    fileLimit: MAX_FILE,
+    timeouts: { totalMs: 3 * 60 * 60 * 1000 },
+  }).downloadUpdateFile;
   return async (file: { bytes: number; sha256: string }, url: string): Promise<void> => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'chronicle-cos-public-'));
     try {
