@@ -15,10 +15,18 @@ export interface ProgramUpdateStatus {
   packageId?: string;
 }
 
+export type OnlineUpdateSource = 'github' | 'china' | 'mirror';
+
+/** The persisted/API protocol stays readable by the fixed beta.19 desktop worker. */
 export interface OnlineUpdateSettings {
   channel: 'stable' | 'preview';
   source: 'github' | 'mirror';
   mirrorBaseUrl?: string;
+}
+
+/** The built-in China preset is an input choice, normalized to a fixed mirror URL. */
+export interface OnlineUpdateSettingsInput extends Omit<OnlineUpdateSettings, 'source'> {
+  source: OnlineUpdateSource;
 }
 
 export interface OnlineUpdateRelease {
@@ -36,7 +44,7 @@ export interface OnlineUpdateTask {
   version: string;
   received: number;
   total: number;
-  source: 'github' | 'mirror';
+  source: OnlineUpdateSource;
   message: string;
   packageId?: string;
 }

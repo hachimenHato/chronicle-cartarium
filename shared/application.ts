@@ -1,6 +1,6 @@
 import type { WorkspaceEnvelope } from './model';
 import type { UserAccount } from './access';
-export const APPLICATION_VERSION = '0.2.0-beta.19';
+export const APPLICATION_VERSION = '0.2.0-beta.20';
 
 export const themes = { parchment: '羊皮卷', jade: '青玉庭', midnight: '星夜' } as const;
 export type Theme = keyof typeof themes;

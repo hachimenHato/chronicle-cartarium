@@ -1,11 +1,12 @@
 # 各平台更新教程
 
-本指南对应 **0.2.0-beta.19**。下载文件以[本版发行页](https://github.com/hachimenHato/chronicle-cartarium/releases/tag/v0.2.0-beta.19)实际列出的附件为准。它仍是公开测试版；Linux、macOS 和 Docker 的完整升级、失败恢复及断电场景尚未全部实机验收。签名包可校验、源码 CI 通过，不等于这些场景已经全部通过。
+本指南对应 **0.2.0-beta.20**。下载文件以[本版发行页](https://github.com/hachimenHato/chronicle-cartarium/releases/tag/v0.2.0-beta.20)实际列出的附件为准。它仍是公开测试版；Linux、macOS 和 Docker 的完整升级、失败恢复及断电场景尚未全部实机验收。签名包可校验、源码 CI 通过，不等于这些场景已经全部通过。
 
 ## 先选择自己的情况
 
-| 目前怎样使用                                     | 更新到 beta.19                                                                 | 以后日常更新                                    | 另外要注意                                                     |
+| 目前怎样使用                                     | 更新到 beta.20                                                                 | 以后日常更新                                    | 另外要注意                                                     |
 | ------------------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------------- | -------------------------------------------------------------- |
+| Windows 桌面 / CMD、Linux 或 macOS，beta.19      | 在原工作台点击“检查更新 → 下载并安全更新”，选择 beta.20                        | 同一入口；也可保留离线导入                      | 桌面 EXE 另在原生“帮助”菜单更新；两者共享下载来源偏好          |
 | Windows 桌面窗口版，后端 beta.5～18              | 在原工作台离线导入 `win-x64.ccupdate`                                          | 后台“检查更新 → 下载并安全更新”，或继续离线导入 | 更新的是工作台后端；EXE 窗口壳另按下文更新                     |
 | Windows CMD 版，beta.5～18                       | 用原 `start.cmd` 启动后，离线导入 `win-x64.ccupdate`                           | 同上                                            | 不用解压新版 ZIP 覆盖原目录                                    |
 | Linux x64 / arm64，beta.5～18                    | 用原 `start.sh` 启动，离线导入相同架构的 Linux `.ccupdate`                     | 有兼容签名包时使用在线按钮，或离线导入          | 两种架构不能混用；完整升级恢复实测范围见 Release               |
@@ -14,7 +15,22 @@
 | Docker，公开镜像或自行构建                       | 由宿主机更换镜像并保留原卷，见 Docker 专节                                     | 网页可检查版本，不能自行更换容器                | 不导入 `.ccupdate`，不挂载 Docker socket                       |
 | beta.4 及更早、未知格式、换系统/架构             | 维护者先核对数据格式，按完整备份恢复到新目录过渡                               | 过渡成功后按新部署方式更新                      | 不直接套用同系统增量更新，也不要让旧程序读取未知新格式         |
 
-**beta.18 及更早版本没有联网更新按钮。** 第一次先用离线包升级到 beta.19；之后新版本有兼容包时才可点击在线更新。升级到 beta.19 后检查不到更高版本是正常的，不表示安装失败。
+**beta.19 已有联网更新按钮，可以直接在线升级到 beta.20。** 更新后才会出现内置“国内下载源（腾讯云）”选项；从未配置过的安装仍默认使用 GitHub，原有来源设置不被擅自切换。测试版需使用“预览版”渠道。
+
+**beta.18 及更早版本没有联网更新按钮。** 最低在线更新版本仍是 beta.19，可先按下文离线升级到 beta.20，或用原 beta.19 包完成过渡后再在线升级。桌面旧 EXE 的一次换壳要求见后文，不能只升后端就跳过。
+
+## 首次下载安装与国内源覆盖范围
+
+首次安装仍在[官方发行页](https://github.com/hachimenHato/chronicle-cartarium/releases/tag/v0.2.0-beta.20)选择系统和 CPU。Windows 桌面是额外下载项，原 CMD / 服务器版继续提供；Linux 与 macOS 各提供 x64、arm64 包，Docker 由镜像部署。
+
+| 文件 / 用途                                                      | 国内源覆盖情况                                 |
+| ---------------------------------------------------------------- | ---------------------------------------------- |
+| Windows 桌面完整 ZIP，首次安装或自动更新 EXE                     | 同步成功后可直接国内下载；完整解压后运行 EXE   |
+| Windows x64、Linux x64 / arm64、macOS x64 / arm64 的 `.ccupdate` | 同步成功后供已有工作台更新；不能作为首次安装包 |
+| Windows CMD ZIP、Linux / macOS 首次安装 TAR                      | 暂未同步，从 GitHub 发行页下载                 |
+| Docker 镜像、npm 依赖                                            | 不经此源，仍走各自仓库和下载配置               |
+
+内置根地址为 `https://files.hachimen.info/chronicle-cartarium/updates`。例如 beta.20 的 Windows 桌面文件路径为根地址加 `/v0.2.0-beta.20/chronicle-cartarium-0.2.0-beta.20-windows-desktop-x64.zip`。**这只是路径说明，不保证上传已完成**；先核对[同步工作流](https://github.com/hachimenHato/chronicle-cartarium/actions/workflows/cos-mirror.yml)对应标签的最终结果及公开下载验证，尚未成功时使用 GitHub。GitHub Release 先发布，COS 之后排队同步，二者不保证同时就绪。安装包与更新包均不包含腾讯云密钥。
 
 ## 所有方式都先做这几件事
 
@@ -29,15 +45,15 @@
 
 ### 1. 下载匹配的更新包
 
-从[发行页](https://github.com/hachimenHato/chronicle-cartarium/releases)下载对应系统和**实际后端进程架构**的文件。beta.19 的标准名称如下；没有对应附件时先等待发行完善，不要拿 ZIP/TAR 代替。
+从[发行页](https://github.com/hachimenHato/chronicle-cartarium/releases)下载对应系统和**实际后端进程架构**的文件。beta.20 的标准名称如下；没有对应附件时先等待发行完善，不要拿 ZIP/TAR 代替。
 
 | 系统 / 架构               | 更新包                                                    |
 | ------------------------- | --------------------------------------------------------- |
-| Windows x64，含桌面版后端 | `chronicle-cartarium-0.2.0-beta.19-win-x64.ccupdate`      |
-| Linux x64                 | `chronicle-cartarium-0.2.0-beta.19-linux-x64.ccupdate`    |
-| Linux arm64               | `chronicle-cartarium-0.2.0-beta.19-linux-arm64.ccupdate`  |
-| macOS Intel x64           | `chronicle-cartarium-0.2.0-beta.19-darwin-x64.ccupdate`   |
-| macOS Apple Silicon arm64 | `chronicle-cartarium-0.2.0-beta.19-darwin-arm64.ccupdate` |
+| Windows x64，含桌面版后端 | `chronicle-cartarium-0.2.0-beta.20-win-x64.ccupdate`      |
+| Linux x64                 | `chronicle-cartarium-0.2.0-beta.20-linux-x64.ccupdate`    |
+| Linux arm64               | `chronicle-cartarium-0.2.0-beta.20-linux-arm64.ccupdate`  |
+| macOS Intel x64           | `chronicle-cartarium-0.2.0-beta.20-darwin-x64.ccupdate`   |
+| macOS Apple Silicon arm64 | `chronicle-cartarium-0.2.0-beta.20-darwin-arm64.ccupdate` |
 
 普通 ZIP/TAR 是**新安装包**，不能改后缀冒充更新包。Windows 桌面 ZIP 与 CMD ZIP 也不作为后台更新包使用。可先按发行页的 `SHA256SUMS.txt` 核对下载，后台还会用内置公钥验证官方签名、每个文件、版本和数据格式；不需要导入任何新公钥。
 
@@ -46,7 +62,7 @@
 1. Windows CMD 版双击**原安装根**的 `start.cmd`。Linux 在原根目录执行 `sh start.sh`；macOS 双击原 `start.command` 或执行 `sh start.sh`。当前平台发行包含匹配的运行时；不要把 Windows `node.exe` 搬到其他系统。
 2. 桌面版直接打开原窗口。如工作台在别处，用“工作台 → 打开已有工作台…”选择包含 `scripts/launch.mjs` 和 `package.json` 的原程序根目录，不能只选 `data`。
 3. 使用主管理员账号进入“工作台设置 → 程序更新”。旧界面直接点“选择更新包”；新界面展开“离线导入更新包”。选刚下载的 `.ccupdate`。
-4. 等待签名、文件和兼容检查通过，确认目标版本为 beta.19，再点击“备份并更新至 …”。系统自动准备运行组件、暂停写入、备份与恢复验证、切换和核对资料。
+4. 等待签名、文件和兼容检查通过，确认目标版本为 beta.20，再点击“备份并更新至 …”。系统自动准备运行组件、暂停写入、备份与恢复验证、切换和核对资料。
 5. 等待完成提示。更新过程中不要关启动终端、退出桌面应用、重启服务器或手动删除 `.worldloom`。
 
 ### 旧 Linux/macOS 首次过渡的 npm 查找
@@ -59,7 +75,7 @@ export npm_execpath="$PWD/runtime/node_modules/npm/bin/npm-cli.js"
 sh start.sh
 ```
 
-第一条必须在原安装根执行，使路径固定为原包内的 npm CLI；第二条用于确认这个文件可由附带 Node 正常运行。然后在该次启动的网页中离线导入 beta.19，保持这个终端运行直到完成。若前置版本来自源码且没有 `runtime/`，确认系统的 `node --version` 为 22.18+、`npm --version` 能成功，再用原 `sh start.sh` 启动即可。不要为此更改数据库连接或数据目录。
+第一条必须在原安装根执行，使路径固定为原包内的 npm CLI；第二条用于确认这个文件可由附带 Node 正常运行。然后在该次启动的网页中离线导入目标版本，保持这个终端运行直到完成。若前置版本来自源码且没有 `runtime/`，确认系统的 `node --version` 为 22.18+、`npm --version` 能成功，再用原 `sh start.sh` 启动即可。不要为此更改数据库连接或数据目录。
 
 beta.19 起改为直接使用已验签更新包中的 npm CLI，不再依赖系统 PATH 或此临时变量；本次更新完成后正常退出临时终端，以后正常使用原 `start.sh` / `start.command`。Windows 不需要这个 Unix 过渡步骤。
 
@@ -77,13 +93,21 @@ beta.19 起改为直接使用已验签更新包中的 npm CLI，不再依赖系�
 
 ### 使用国内镜像
 
-默认从 GitHub 下载，目前没有内置的国内加速站。项目维护者可以搭建公开 HTTPS 静态镜像，普通用户不必各自搭站。
+beta.20 在“工作台设置 → 程序更新 → 更新来源与渠道”提供三种来源：
 
-在“更新来源与渠道”选择“自建镜像”，填写维护者给出的根地址，例如 `https://downloads.example.com/chronicle-cartarium`，保存后重新检查。地址不含账号、密码、查询参数或片段；内网地址不支持。镜像失败会尝试 GitHub，两个来源都必须通过同一套官方签名验证。没有镜像地址就继续使用 GitHub，不要填写来源不明的代理地址。
+| 来源                 | 怎样设置                              | 实际范围                                                  |
+| -------------------- | ------------------------------------- | --------------------------------------------------------- |
+| GitHub               | 默认项，无需地址或令牌                | 官方公开发行清单与附件                                    |
+| 国内下载源（腾讯云） | 直接选择并保存，无需填地址或提供密钥  | 维护者的 `files.hachimen.info` 更新目录，已同步版本才可用 |
+| 自建镜像             | 填维护者提供的公开 HTTPS 根地址并保存 | 安装维护者自行托管的相同官方更新包                        |
 
-镜像目录、生成工具与安全边界见[镜像维护说明](update-strategy.md#github与国内镜像)。镜像可同时转发桌面 ZIP 和对应的 `.update.json` 签名描述；不包含它们时桌面更新会尝试 GitHub。此镜像不加速 Docker 镜像或 npm 依赖。
+保存后重新“检查更新”。国内源固定为 `https://files.hachimen.info/chronicle-cartarium/updates`；旧 beta.19 若暂不能升级，可继续选择“自建镜像”手填此地址。自建地址不能含账号、密码、查询参数或片段，内网地址不支持。
 
-维护者使用腾讯云 COS 时，按[专用桶、域名与 GitHub 自动同步教程](tencent-cos.md)配置即可。凭据只交给维护者的发布环境；普通用户只填写经维护者验证可用的 HTTPS 镜像根地址，不提供腾讯云密钥，也不需要自建存储桶。
+两种镜像不可用或下载失败时均会尝试 GitHub，所有来源必须通过同一套原官方签名验证。新 Release 可能还在队列中同步：所有版本文件上传并匿名全文校验后才提交清单；仅在 GitHub 已发布不表示国内源已有新版，清单仍旧时可稍后再查或切回 GitHub。不要通过频繁检查绕过缓存。
+
+Windows 桌面“帮助 → 检查桌面程序更新…”沿用同一来源和渠道偏好。桌面壳仍需兼容的 Windows ZIP 与配套 `.update.json`，不包含它们的自建镜像会尝试 GitHub。原 EXE 自动更新的最低版本保持 beta.19；beta.20 后端选好内置国内源后，原 beta.19 壳也能直接使用这项设置在线升级，无需先切回 GitHub 或手填镜像地址。选择来源本身不会升级窗口壳。
+
+镜像目录、生成工具与安全边界见[镜像维护说明](update-strategy.md#github与国内镜像)。此镜像不加速 Docker 镜像或 npm 依赖。维护者配置见[专用桶、域名与 GitHub 自动同步教程](tencent-cos.md)；普通用户不需要腾讯云账号、密钥或自行搭站。
 
 ## Windows 桌面 EXE 外壳怎样更新
 
@@ -92,7 +116,7 @@ beta.19 起改为直接使用已验签更新包中的 npm CLI，不再依赖系�
 ### beta.19 起：在窗口里自动下载、安装和重开
 
 1. 确认桌面壳与当前打开的原 `workspace` 后端都已是 beta.19 或以后版本。旧工作台先在后台离线导入对应 Windows `.ccupdate` 升到 beta.19；仅换新 EXE 不会升级后端，缺少新维护接口时菜单会拒绝更新并提示先升级后端。保存编辑内容，等待保存完成，以主管理员身份操作；开启登录时先登录主管理员账号。
-2. 在原生菜单选择 **帮助 → 检查桌面程序更新…**。它会沿用后台设置的渠道/镜像偏好；没有镜像就使用官方 GitHub。
+2. 在原生菜单选择 **帮助 → 检查桌面程序更新…**。它会沿用后台设置的渠道与来源，包含 beta.20 新增的“国内下载源（腾讯云）”；默认使用官方 GitHub。后端升级到 beta.20 并选好国内源后，仍运行 beta.19 的桌面壳也可直接读取设置并升级到新版，不需要先升级壳或重新填写地址。旧窗口可能将这项来源显示为“自建镜像”，实际使用的是同一个国内地址。
 3. 有兼容新版时点“下载并安装”。关闭下载小窗可以取消下载；进入验签、解压和备份后请等待。完整桌面 ZIP 最大512MiB，解压最大2GiB，安装位置需至少3GB空闲空间。
 4. 程序验证独立的官方 Ed25519 桌面签名清单、ZIP 摘要和全部解压文件，自动创建并验证完整工作台备份，然后退出窗口。
 5. 独立助手等待旧窗口退出，启动新版并核对原账号、工作台路径及资料摘要；确认后才切换桌面启动指针。重新登录，在“帮助 → 关于编年图志”查看实际运行的桌面版本。
@@ -233,7 +257,7 @@ docker compose -p YOUR_PROJECT -f docker-compose.image.yml exec -T app node --im
 
 保留原部署目录、原 `docker-compose.yml`、私有 `.env`、项目名及卷配置。先取得官方目标版本源码，审阅并保留自己的 Compose 配置；如果使用 Git 且有本地修改，先私密保存、合并这些修改，不使用强制 reset/clean 清理安装目录。
 
-若已有覆盖文件将 `app.image` 固定为旧镜像，构建前把该项改为一个新的本地标签，例如 `chronicle-cartarium-local:0.2.0-beta.19`，保留原 `DATA_DIR`、维护字段和其他配置；构建与启动都使用同一组 `-f` 文件。否则 `up --no-build` 可能继续使用覆盖文件指定的旧镜像，而不是刚构建的内容。
+若已有覆盖文件将 `app.image` 固定为旧镜像，构建前把该项改为一个新的本地标签，例如 `chronicle-cartarium-local:0.2.0-beta.20`，保留原 `DATA_DIR`、维护字段和其他配置；构建与启动都使用同一组 `-f` 文件。否则 `up --no-build` 可能继续使用覆盖文件指定的旧镜像，而不是刚构建的内容。
 
 先构建，不先替换正在运行的容器：
 

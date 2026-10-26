@@ -9,6 +9,7 @@ import { createUpdateDownloader } from './update-download';
 import { fileDigest } from './full-backup';
 import { UPDATE_CATALOG, UPDATE_REPOSITORY, parseOnlineSettings } from './online-update';
 import type { OnlineUpdateSettings } from '../shared/update';
+import { updateMirrorBaseUrl } from '../shared/update-sources';
 const { digest, compare, verifyDesktopManifest, releaseDirectory } = createRequire(import.meta.url)(
   '../shared/desktop-update-security.cjs',
 );
@@ -115,10 +116,11 @@ export class DesktopUpdateService {
   }
   async check(signal?: AbortSignal) {
     const read = this.dependencies.readJson || downloader.readUpdateJson;
-    if (this.settings.source === 'mirror') {
+    const mirror = updateMirrorBaseUrl(this.settings);
+    if (mirror) {
       try {
         const selected = selectDesktopRelease(
-          await read(`${this.settings.mirrorBaseUrl}/releases.json`, signal),
+          await read(`${mirror}/releases.json`, signal),
           this.currentVersion,
           this.settings.channel,
         );
@@ -162,12 +164,10 @@ export class DesktopUpdateService {
       const official = (name: string) =>
         `${UPDATE_REPOSITORY}/releases/download/v${candidate.version}/${name}`;
       let signed: unknown;
-      if (this.settings.source === 'mirror') {
+      const mirror = updateMirrorBaseUrl(this.settings);
+      if (mirror) {
         try {
-          signed = await read(
-            `${this.settings.mirrorBaseUrl}/v${candidate.version}/${metadata}`,
-            signal,
-          );
+          signed = await read(`${mirror}/v${candidate.version}/${metadata}`, signal);
           verifyDesktopManifest(signed, this.currentVersion, this.dependencies.trust);
         } catch {
           signal.throwIfAborted();
@@ -195,11 +195,9 @@ export class DesktopUpdateService {
           (received) => progress(received, candidate.bytes, 'downloading'),
           signal,
         );
-      if (this.settings.source === 'mirror') {
+      if (mirror) {
         try {
-          await fetchArchive(
-            `${this.settings.mirrorBaseUrl}/v${candidate.version}/${manifest.archive.name}`,
-          );
+          await fetchArchive(`${mirror}/v${candidate.version}/${manifest.archive.name}`);
         } catch {
           signal.throwIfAborted();
           await fetchArchive(official(manifest.archive.name));

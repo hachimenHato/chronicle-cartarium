@@ -13,16 +13,20 @@ import {
 } from 'lucide-react';
 import type {
   OnlineUpdateSettings,
+  OnlineUpdateSettingsInput,
   OnlineUpdateStatus,
   ProgramUpdateStatus,
 } from '../../shared/update';
 import { request } from '../lib/api';
 import { UPDATE_PACKAGE_EXTENSION } from '../../shared/branding';
+import { updateSourceChoice, updateSourceLabel } from '../../shared/update-sources';
 import './ProgramUpdatePanel.css';
 
 const activePhases = ['preparing', 'backup', 'switching', 'checking'];
-const sourceName = (source: OnlineUpdateSettings['source']) =>
-  source === 'github' ? 'GitHub 官方发行' : '自建镜像';
+const editableSettings = (settings: OnlineUpdateSettings): OnlineUpdateSettingsInput => ({
+  ...settings,
+  source: updateSourceChoice(settings),
+});
 const size = (bytes: number) =>
   bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -31,7 +35,7 @@ const size = (bytes: number) =>
 export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
   const [status, setStatus] = useState<ProgramUpdateStatus>();
   const [online, setOnline] = useState<OnlineUpdateStatus>();
-  const [draft, setDraft] = useState<OnlineUpdateSettings>();
+  const [draft, setDraft] = useState<OnlineUpdateSettingsInput>();
   const [action, setAction] = useState<string>();
   const [error, setError] = useState('');
   const [safeNotice, setSafeNotice] = useState('');
@@ -117,7 +121,7 @@ export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
       programNow.current = next;
       setStatus(next);
       setOnline(nextOnline);
-      setDraft((current) => current ?? nextOnline.settings);
+      setDraft((current) => current ?? editableSettings(nextOnline.settings));
       const task = nextOnline.task;
       if (task?.phase === 'error' || task?.phase === 'cancelled') clearIntent();
       const armed = intent.current;
@@ -251,7 +255,7 @@ export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
       });
       if (alive.current && lifecycle.current === mount) {
         setOnline(next);
-        setDraft(next.settings);
+        setDraft(editableSettings(next.settings));
         setSafeNotice('更新来源已保存。请点击「检查更新」获取此来源的版本。');
       }
     } catch (e) {
@@ -290,14 +294,14 @@ export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
   const settingsChanged =
     !!draft &&
     !!online &&
-    (draft.source !== online.settings.source ||
+    (draft.source !== updateSourceChoice(online.settings) ||
       draft.channel !== online.settings.channel ||
       (draft.source === 'mirror' &&
-        (draft.mirrorBaseUrl ?? '') !== (online.settings.mirrorBaseUrl ?? '')));
+        (draft.mirrorBaseUrl?.trim() ?? '') !== (online.settings.mirrorBaseUrl ?? '')));
   const release = online?.release;
   const available = !!release && !online?.upToDate;
   const progress = task?.total ? Math.min(100, Math.max(0, (task.received / task.total) * 100)) : 0;
-  const editSettings = (next: OnlineUpdateSettings) => {
+  const editSettings = (next: OnlineUpdateSettingsInput) => {
     clearIntent('更新来源正在修改，当前下载不会自动安装。');
     setDraft(next);
   };
@@ -315,7 +319,7 @@ export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
         <div className="program-online-source">
           <Globe2 size={17} />
           <div>
-            <strong>{online ? sourceName(online.settings.source) : '正在读取更新状态…'}</strong>
+            <strong>{online ? updateSourceLabel(online.settings) : '正在读取更新状态…'}</strong>
             {online && (
               <small>
                 {online.settings.channel === 'preview' ? '预览版' : '稳定版'} · {online.platform} /{' '}
@@ -400,7 +404,7 @@ export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
             <div className="program-download-footer">
               <small>
                 {size(task.received)}
-                {task.total > 0 && ` / ${size(task.total)}`} · {sourceName(task.source)}
+                {task.total > 0 && ` / ${size(task.total)}`} · {updateSourceLabel(task.source)}
               </small>
               <button
                 className="btn"
@@ -529,8 +533,20 @@ export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
                     onChange={() => editSettings({ ...draft, source: 'github' })}
                   />
                   <span>
-                    <strong>GitHub 官方发行</strong>
+                    <strong>{updateSourceLabel('github')}</strong>
                     <small>直接下载项目发布的更新包</small>
+                  </span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="update-source"
+                    checked={draft.source === 'china'}
+                    onChange={() => editSettings({ ...draft, source: 'china' })}
+                  />
+                  <span>
+                    <strong>{updateSourceLabel('china')}</strong>
+                    <small>项目维护的国内下载入口，无需填写地址</small>
                   </span>
                 </label>
                 <label>
@@ -541,11 +557,17 @@ export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
                     onChange={() => editSettings({ ...draft, source: 'mirror' })}
                   />
                   <span>
-                    <strong>自建镜像</strong>
-                    <small>使用维护者配置的 HTTPS 镜像</small>
+                    <strong>{updateSourceLabel('mirror')}</strong>
+                    <small>填写自己的 HTTPS 镜像地址</small>
                   </span>
                 </label>
               </div>
+              <p className="program-source-help">
+                <ShieldCheck size={16} aria-hidden="true" />
+                <span>
+                  所有来源均会验证官方签名与文件完整性。国内源与自建镜像连接失败时，会尝试 GitHub。
+                </span>
+              </p>
               {draft.source === 'mirror' && (
                 <label className="field">
                   镜像入口地址
@@ -561,7 +583,7 @@ export function ProgramUpdatePanel({ canUpdate }: { canUpdate: boolean }) {
                   />
                   <small>
                     仅支持
-                    HTTPS。需要自行部署或由服务器维护者提供；目前没有内置国内加速服务，实际速度取决于网络与镜像部署。
+                    HTTPS。请填写自己部署或由服务器维护者提供的镜像入口；使用内置国内源无需配置此地址。
                   </small>
                 </label>
               )}

@@ -5,6 +5,15 @@ const { randomUUID, randomBytes } = require('node:crypto');
 const { cleanEnvironment } = require('./service.cjs');
 const { prepared } = require('./shell-update-helper.cjs');
 const { compare } = require('../shared/desktop-update-security.cjs');
+const updateSources = require('../shared/update-sources.json');
+function desktopUpdateSourceLabel(settings) {
+  const source =
+    settings.source === 'mirror' &&
+    settings.mirrorBaseUrl?.replace(/\/+$/, '') === updateSources.china.baseUrl
+      ? 'china'
+      : settings.source;
+  return updateSources[source]?.label || updateSources.github.label;
+}
 async function readJson(file) {
   try {
     return JSON.parse(await fs.readFile(file, 'utf8'));
@@ -239,7 +248,8 @@ class ShellUpdater {
           void note('正在取消，原程序与资料保留…');
         }
       });
-      await note('正在检查官方桌面发行。关闭此小窗可取消。');
+      const sourceName = desktopUpdateSourceLabel(settings);
+      await note(`正在通过${sourceName}检查官方桌面发行。关闭此小窗可取消。`);
       const found = await this.execute('check', settings, undefined, undefined, (process) => {
         child = process;
         if (cancelled) child.stdin.write('cancel\n');
@@ -372,4 +382,9 @@ class ShellUpdater {
     }
   }
 }
-module.exports = { ShellUpdater, delegateUpdatedShell, reportShellStartup };
+module.exports = {
+  ShellUpdater,
+  delegateUpdatedShell,
+  reportShellStartup,
+  desktopUpdateSourceLabel,
+};

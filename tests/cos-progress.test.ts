@@ -191,3 +191,24 @@ test('COS progress never interrupts publishing when malformed events, logger or 
   );
   assert.doesNotThrow(() => brokenClock({ stage: 'upload-progress', loaded: 0, bytes: 997 }));
 });
+
+test('COS retry progress resets an exhausted upload counter and identifies a failing file safely', () => {
+  const f = fixture();
+  const progress = { fileIndex: 2, fileCount: 7, bytes: 997 };
+  f.log({ stage: 'upload-progress', ...progress, loaded: 997 });
+  f.log({ stage: 'upload-retry', ...progress, attempt: 2 });
+  f.log({ stage: 'upload-progress', ...progress, loaded: 0 });
+  f.log({ stage: 'file-failed', ...progress });
+  assert.deepEqual(f.lines, [
+    '第 2/7 个更新文件上传进度：997 / 997 字节（100%）。',
+    '第 2/7 个更新文件传输中断，已确认对象尚未提交；开始第 2/3 次上传。',
+    '第 2/7 个更新文件上传进度：0 / 997 字节（0%）。',
+    '第 2/7 个更新文件处理失败；停止领取新文件，等待其他在途任务结束。',
+  ]);
+  f.log({
+    stage: 'upload-retry',
+    ...progress,
+    attempt: 'FAKE_SECRET',
+  } as unknown as CosProgressEvent);
+  assert.doesNotMatch(f.lines.join('\n'), /FAKE_SECRET/);
+});

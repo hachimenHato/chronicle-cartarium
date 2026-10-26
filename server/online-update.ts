@@ -3,6 +3,12 @@ import { mkdir, mkdtemp, readFile, writeFile, rename, unlink, rm } from 'node:fs
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { APPLICATION_VERSION } from '../shared/application';
+import {
+  UPDATE_SOURCES,
+  updateMirrorBaseUrl,
+  updateSourceChoice,
+  updateSourceLabel,
+} from '../shared/update-sources';
 import type {
   OnlineUpdateSettings,
   OnlineUpdateStatus,
@@ -22,13 +28,20 @@ const versionPattern = /^\d{1,9}\.\d{1,9}\.\d{1,9}(?:-(?:alpha|beta|rc)\.\d{1,9}
 const settingsSchema = z
   .object({
     channel: z.enum(['stable', 'preview']),
-    source: z.enum(['github', 'mirror']),
+    source: z.enum(['github', 'china', 'mirror']),
     mirrorBaseUrl: z.string().max(1500).optional(),
   })
   .strict();
 
 export function parseOnlineSettings(input: unknown): OnlineUpdateSettings {
   const settings = settingsSchema.parse(input);
+  if (settings.source === 'china') {
+    return {
+      channel: settings.channel,
+      source: 'mirror',
+      mirrorBaseUrl: UPDATE_SOURCES.china.baseUrl,
+    };
+  }
   const base = settings.mirrorBaseUrl?.trim();
   if (settings.source === 'mirror' && !base)
     throw new DataProtectionError('请填写自己管理的 HTTPS 镜像地址。');
@@ -44,7 +57,7 @@ export function parseOnlineSettings(input: unknown): OnlineUpdateSettings {
       throw new DataProtectionError('镜像地址只能包含 HTTPS 域名和目录，不包含端口、参数或凭据。');
     settings.mirrorBaseUrl = url.href.replace(/\/+$/, '');
   } else delete settings.mirrorBaseUrl;
-  return settings;
+  return { ...settings, source: settings.source };
 }
 
 /** Catalog metadata is untrusted. Only a precisely named asset in the fixed official repository is eligible. */
@@ -239,13 +252,14 @@ export class OnlineUpdateService {
     const read = this.dependencies.readJson || readUpdateJson;
     try {
       let catalog: unknown;
-      if (this.settings.source === 'mirror') {
+      const mirror = updateMirrorBaseUrl(this.settings);
+      if (mirror) {
         try {
-          catalog = await read(`${this.settings.mirrorBaseUrl}/releases.json`);
+          catalog = await read(`${mirror}/releases.json`);
           // Validate before trusting a response; malformed mirrors also fall back.
           selectOnlineRelease(catalog, this.settings.channel, this.platform, this.architecture);
         } catch {
-          this.notice = '镜像清单暂不可用，已改用 GitHub 官方源。';
+          this.notice = `${updateSourceLabel(this.settings)}清单暂不可用，已改用 GitHub 官方源。`;
           catalog = await read(UPDATE_CATALOG);
         }
       } else catalog = await read(UPDATE_CATALOG);
@@ -287,7 +301,7 @@ export class OnlineUpdateService {
       version,
       received: 0,
       total: asset.bytes,
-      source: this.settings.source,
+      source: updateSourceChoice(this.settings),
       message: '正在下载更新包，原程序和数据保持可用…',
     };
     this.task = task;
@@ -315,15 +329,16 @@ export class OnlineUpdateService {
               },
               controller.signal,
             );
-          if (this.settings.source === 'mirror') {
+          const mirror = updateMirrorBaseUrl(this.settings);
+          if (mirror) {
             try {
-              await fetch(`${this.settings.mirrorBaseUrl}/v${version}/${asset.name}`);
+              await fetch(`${mirror}/v${version}/${asset.name}`);
             } catch {
               controller.signal.throwIfAborted();
               // The downloader owns/deletes partial files before another source can be tried.
               task.source = 'github';
               task.received = 0;
-              task.message = '镜像下载未通过，正在改用 GitHub 官方源…';
+              task.message = `${updateSourceLabel(this.settings)}下载未通过，正在改用 GitHub 官方源…`;
               await fetch(official);
             }
           } else await fetch(official);

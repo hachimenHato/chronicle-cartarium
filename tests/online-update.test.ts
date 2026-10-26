@@ -15,6 +15,12 @@ import {
 } from '../server/online-update';
 import { readConfig } from '../server/config';
 import { APPLICATION_VERSION } from '../shared/application';
+import {
+  UPDATE_SOURCES,
+  updateMirrorBaseUrl,
+  updateSourceChoice,
+  updateSourceLabel,
+} from '../shared/update-sources';
 import { verifyRelease, releaseFiles, releaseManifestSchema } from '../server/release-package';
 import { digest, fileDigest } from '../server/full-backup';
 import { MaintenanceError } from '../server/maintenance';
@@ -115,6 +121,75 @@ test('mirror configuration forbids credentials, private literals, HTTP, query an
   );
 });
 
+test('the built-in China source ignores caller mirror addresses and preserves custom mirror validation', () => {
+  for (const mirrorBaseUrl of [undefined, 'https://evil.example', 'http://127.0.0.1']) {
+    const settings = parseOnlineSettings({ source: 'china', channel: 'preview', mirrorBaseUrl });
+    assert.deepEqual(settings, {
+      source: 'mirror',
+      channel: 'preview',
+      mirrorBaseUrl: UPDATE_SOURCES.china.baseUrl,
+    });
+    assert.equal(updateMirrorBaseUrl(settings), UPDATE_SOURCES.china.baseUrl);
+    assert.equal(updateSourceChoice(settings), 'china');
+    assert.equal(updateSourceLabel(settings), UPDATE_SOURCES.china.label);
+    assert.equal(
+      updateSourceLabel(settings.source, settings.mirrorBaseUrl),
+      UPDATE_SOURCES.china.label,
+    );
+  }
+  assert.equal(updateMirrorBaseUrl({ source: 'github', channel: 'preview' }), undefined);
+});
+
+test('China selection persists as a fixed legacy-safe mirror and reopening keeps GitHub as the new-install default', async (t) => {
+  const { program, config } = await fixture(t);
+  const service = new OnlineUpdateService(program);
+  assert.equal((await service.status()).settings.source, 'github');
+  await service.saveSettings({
+    source: 'china',
+    channel: 'preview',
+    mirrorBaseUrl: 'https://evil.example',
+  });
+  const expected = {
+    source: 'mirror',
+    channel: 'preview',
+    mirrorBaseUrl: UPDATE_SOURCES.china.baseUrl,
+  };
+  assert.deepEqual((await service.status()).settings, expected);
+  assert.deepEqual(
+    JSON.parse(await readFile(path.join(program.root, 'online-update-settings.json'), 'utf8')),
+    expected,
+  );
+  const reopened = new OnlineUpdateService(new ProgramUpdateService(config));
+  assert.deepEqual((await reopened.status()).settings, expected);
+});
+
+test('China catalog checks use the built-in address and fall back safely on unavailable or malformed responses', async (t) => {
+  for (const response of ['valid', 'offline', 'malformed'] as const) {
+    const { program } = await fixture(t);
+    const calls: string[] = [];
+    const service = new OnlineUpdateService(program, {
+      platform: 'win32',
+      architecture: 'x64',
+      readJson: async (url) => {
+        calls.push(url);
+        if (url === UPDATE_CATALOG || response === 'valid') return catalog();
+        if (response === 'malformed') return { unexpected: 'invalid catalog' };
+        throw new Error('provider details must not leak');
+      },
+    });
+    await service.saveSettings({ source: 'china', channel: 'preview' });
+    const state = await service.check();
+    assert.equal(state.release?.version, nextVersion);
+    assert.deepEqual(calls, [
+      `${UPDATE_SOURCES.china.baseUrl}/releases.json`,
+      ...(response === 'valid' ? [] : [UPDATE_CATALOG]),
+    ]);
+    if (response === 'valid') assert.equal(state.notice, undefined);
+    else assert.match(state.notice!, /国内下载源.*GitHub/);
+    assert(!JSON.stringify(state).includes('provider details'));
+  }
+});
+
 test('checks are cached, failures back off, settings persist and mirror checks fall back to GitHub', async (t) => {
   const { program, config } = await fixture(t);
   let now = Date.now();
@@ -202,119 +277,132 @@ test('cancel reserves the program gate, prevents offline apply/import races and 
   );
 });
 
-test('a real signed downloaded archive is only staged, then separately applied; mirror transfer failure falls back', async (t) => {
-  const { root, config } = await fixture(t);
-  const release = path.join(root, 'fixture');
-  for (const dir of ['dist', 'server', 'scripts', 'shared'])
-    await mkdir(path.join(release, dir), { recursive: true });
-  for (const [file, content] of Object.entries({
-    'dist/index.html': 'fixture',
-    'dist/app-version.json': JSON.stringify({ applicationVersion: nextVersion }),
-    'server/index.ts': 'fixture',
-    'scripts/launch.mjs': 'fixture',
-    'shared/application.ts': `export const APPLICATION_VERSION = '${nextVersion}';`,
-    'package.json': JSON.stringify({ version: nextVersion }),
-  }))
-    await writeFile(path.join(release, file), content);
-  const pair = generateKeyPairSync('ed25519');
-  const publicKey = pair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
-  const id = createHash('sha256').update(publicKey).digest('hex').slice(0, 16);
-  const entries = [];
-  for (const file of await releaseFiles(release))
-    entries.push({
-      path: file,
-      bytes: (await readFile(path.join(release, file))).length,
-      sha256: await fileDigest(path.join(release, file)),
+for (const scenario of [
+  { source: 'mirror', fallback: true },
+  { source: 'china', fallback: true },
+  { source: 'china', fallback: false },
+] as const)
+  test(`a real signed downloaded archive is separately staged/applied through ${scenario.source}, fallback=${scenario.fallback}`, async (t) => {
+    const { root, config } = await fixture(t);
+    const release = path.join(root, 'fixture');
+    for (const dir of ['dist', 'server', 'scripts', 'shared'])
+      await mkdir(path.join(release, dir), { recursive: true });
+    for (const [file, content] of Object.entries({
+      'dist/index.html': 'fixture',
+      'dist/app-version.json': JSON.stringify({ applicationVersion: nextVersion }),
+      'server/index.ts': 'fixture',
+      'scripts/launch.mjs': 'fixture',
+      'shared/application.ts': `export const APPLICATION_VERSION = '${nextVersion}';`,
+      'package.json': JSON.stringify({ version: nextVersion }),
+    }))
+      await writeFile(path.join(release, file), content);
+    const pair = generateKeyPairSync('ed25519');
+    const publicKey = pair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    const id = createHash('sha256').update(publicKey).digest('hex').slice(0, 16);
+    const entries = [];
+    for (const file of await releaseFiles(release))
+      entries.push({
+        path: file,
+        bytes: (await readFile(path.join(release, file))).length,
+        sha256: await fileDigest(path.join(release, file)),
+      });
+    const manifest = releaseManifestSchema.parse({
+      format: 'worldloom-release',
+      formatVersion: 1,
+      version: nextVersion,
+      minimumVersion: APPLICATION_VERSION,
+      platform: process.platform,
+      architecture: process.arch,
+      mysqlSchema: 5,
+      sqliteSchema: 1,
+      workspaceFormat: 1,
+      installationFormat: 1,
+      userFormat: 1,
+      keyId: id,
+      entries,
     });
-  const manifest = releaseManifestSchema.parse({
-    format: 'worldloom-release',
-    formatVersion: 1,
-    version: nextVersion,
-    minimumVersion: APPLICATION_VERSION,
-    platform: process.platform,
-    architecture: process.arch,
-    mysqlSchema: 5,
-    sqliteSchema: 1,
-    workspaceFormat: 1,
-    installationFormat: 1,
-    userFormat: 1,
-    keyId: id,
-    entries,
+    await writeFile(
+      path.join(release, 'RELEASE-MANIFEST.json'),
+      JSON.stringify({
+        manifest,
+        signature: sign(null, Buffer.from(digest(manifest)), pair.privateKey).toString('base64'),
+      }),
+    );
+    const archive = path.join(root, 'fixture.tar.gz');
+    await createTar({ cwd: release, file: archive, gzip: true }, await readdir(release));
+    const buffer = await readFile(archive);
+    let entered!: () => void;
+    let releaseVerification!: () => void;
+    const verifying = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const barrier = new Promise<void>((resolve) => {
+      releaseVerification = resolve;
+    });
+    const program = new ProgramUpdateService(config, async (dir) => {
+      const verified = await verifyRelease(dir, APPLICATION_VERSION, { [id]: publicKey });
+      entered();
+      await barrier;
+      return verified;
+    });
+    const calls: string[] = [];
+    const service = new OnlineUpdateService(program, {
+      platform: 'win32',
+      architecture: 'x64',
+      readJson: async () =>
+        catalog(nextVersion, buffer.length, createHash('sha256').update(buffer).digest('hex')),
+      download: async (url, file, _expected, progress) => {
+        calls.push(url);
+        if (scenario.fallback && !url.startsWith(UPDATE_REPOSITORY))
+          throw new Error('offline mirror');
+        await writeFile(file, buffer, { flag: 'wx' });
+        progress(buffer.length);
+      },
+    });
+    await service.saveSettings({
+      source: scenario.source,
+      channel: 'preview',
+      mirrorBaseUrl: 'https://cdn.example',
+    });
+    await service.check();
+    await service.startDownload(nextVersion);
+    await verifying;
+    const duringVerification = await service.status();
+    assert.equal(duringVerification.task?.phase, 'verifying');
+    await assert.rejects(service.cancel(duringVerification.task!.id), /无法取消/);
+    releaseVerification();
+    const state = await settled(service);
+    assert.equal(state.task?.phase, 'prepared');
+    assert.equal(state.task?.source, scenario.fallback ? 'github' : 'china');
+    const sourceBase =
+      scenario.source === 'china' ? UPDATE_SOURCES.china.baseUrl : 'https://cdn.example';
+    assert.deepEqual(calls, [
+      `${sourceBase}/v${nextVersion}/${name}`,
+      ...(scenario.fallback
+        ? [`${UPDATE_REPOSITORY}/releases/download/v${nextVersion}/${name}`]
+        : []),
+    ]);
+    assert.equal((await program.status()).packageId, state.task!.packageId);
+    await assert.rejects(readFile(path.join(program.root, 'pending-update.json')), {
+      code: 'ENOENT',
+    });
+    assert.deepEqual(await readdir(path.join(program.root, 'online-incoming')), []);
+    await program.apply(state.task!.packageId!);
+    assert.equal(
+      JSON.parse(await readFile(path.join(program.root, 'pending-update.json'), 'utf8')).version,
+      nextVersion,
+    );
+    const mismatch = new ProgramUpdateService(
+      { ...config, installRoot: path.join(root, 'mismatch') },
+      (dir) => verifyRelease(dir, APPLICATION_VERSION, { [id]: publicKey }),
+    );
+    await assert.rejects(
+      mismatch.prepareOnline(async () => archive, '0.2.0-beta.20', new AbortController().signal),
+      /版本不一致/,
+    );
+    assert.equal((await mismatch.status()).phase, 'idle');
+    assert.deepEqual(await readdir(path.join(mismatch.root, 'staged')), []);
   });
-  await writeFile(
-    path.join(release, 'RELEASE-MANIFEST.json'),
-    JSON.stringify({
-      manifest,
-      signature: sign(null, Buffer.from(digest(manifest)), pair.privateKey).toString('base64'),
-    }),
-  );
-  const archive = path.join(root, 'fixture.tar.gz');
-  await createTar({ cwd: release, file: archive, gzip: true }, await readdir(release));
-  const buffer = await readFile(archive);
-  let entered!: () => void;
-  let releaseVerification!: () => void;
-  const verifying = new Promise<void>((resolve) => {
-    entered = resolve;
-  });
-  const barrier = new Promise<void>((resolve) => {
-    releaseVerification = resolve;
-  });
-  const program = new ProgramUpdateService(config, async (dir) => {
-    const verified = await verifyRelease(dir, APPLICATION_VERSION, { [id]: publicKey });
-    entered();
-    await barrier;
-    return verified;
-  });
-  const calls: string[] = [];
-  const service = new OnlineUpdateService(program, {
-    platform: 'win32',
-    architecture: 'x64',
-    readJson: async () =>
-      catalog(nextVersion, buffer.length, createHash('sha256').update(buffer).digest('hex')),
-    download: async (url, file, _expected, progress) => {
-      calls.push(url);
-      if (!url.startsWith(UPDATE_REPOSITORY)) throw new Error('offline mirror');
-      await writeFile(file, buffer, { flag: 'wx' });
-      progress(buffer.length);
-    },
-  });
-  await service.saveSettings({
-    source: 'mirror',
-    channel: 'preview',
-    mirrorBaseUrl: 'https://cdn.example',
-  });
-  await service.check();
-  await service.startDownload(nextVersion);
-  await verifying;
-  const duringVerification = await service.status();
-  assert.equal(duringVerification.task?.phase, 'verifying');
-  await assert.rejects(service.cancel(duringVerification.task!.id), /无法取消/);
-  releaseVerification();
-  const state = await settled(service);
-  assert.equal(state.task?.phase, 'prepared');
-  assert.equal(state.task?.source, 'github');
-  assert.equal(calls.length, 2);
-  assert.equal((await program.status()).packageId, state.task!.packageId);
-  await assert.rejects(readFile(path.join(program.root, 'pending-update.json')), {
-    code: 'ENOENT',
-  });
-  assert.deepEqual(await readdir(path.join(program.root, 'online-incoming')), []);
-  await program.apply(state.task!.packageId!);
-  assert.equal(
-    JSON.parse(await readFile(path.join(program.root, 'pending-update.json'), 'utf8')).version,
-    nextVersion,
-  );
-  const mismatch = new ProgramUpdateService(
-    { ...config, installRoot: path.join(root, 'mismatch') },
-    (dir) => verifyRelease(dir, APPLICATION_VERSION, { [id]: publicKey }),
-  );
-  await assert.rejects(
-    mismatch.prepareOnline(async () => archive, '0.2.0-beta.20', new AbortController().signal),
-    /版本不一致/,
-  );
-  assert.equal((await mismatch.status()).phase, 'idle');
-  assert.deepEqual(await readdir(path.join(mismatch.root, 'staged')), []);
-});
 
 test('corrupt archive or signature never queues an update; manual and Docker do not download', async (t) => {
   const { program, config } = await fixture(t);

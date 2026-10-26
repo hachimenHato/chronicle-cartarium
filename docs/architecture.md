@@ -1,14 +1,14 @@
 # 架构与数据约定
 
-## 在线来源与受保护的程序更新（2026-10-22）
+## 在线来源与受保护的程序更新（2026-10-26）
 
-shared/update定义在线来源、频道、发行候选和下载任务，与监督程序的持久安装阶段分开。server/online-update管理主管理员的GitHub/自建HTTPS镜像配置、缓存检查、下载进度与取消；GET状态只读取本地进度，显式检查才访问公开发行列表。只选择严格版本标签及当前系统/架构的标准`.ccupdate`附件，镜像元数据仍指向固定官方仓库；镜像实际包为BASE/vVERSION/FILENAME，清单为BASE/releases.json。失败回退GitHub，不接受任意元数据下载地址或未知公钥。
+shared/update定义在线来源、频道、发行候选和下载任务，与监督程序的持久安装阶段分开。beta.20 界面新增 china 选项，对应内置“国内下载源（腾讯云）”固定根地址 https://files.hachimen.info/chronicle-cartarium/updates；github 默认与 mirror 自建接入口保留。china 只作为写入输入别名，服务端统一规范化为 source=mirror 与固定 mirrorBaseUrl 后持久化及返回 API；因此原 beta.19 固定桌面 worker 仍可读取，无需先更新壳。shared/update-sources.json 是公开名称与地址的唯一来源，updateSourceChoice 从规范设置识别预置选项，前端保留独立三值草稿，任务来源在开始下载时快照，回退 GitHub 时更新实际标签。server/online-update管理主管理员的来源配置、缓存检查、下载进度与取消；GET状态只读取本地进度，显式检查才访问公开发行列表。只选择严格版本标签及当前系统/架构的标准`.ccupdate`附件，镜像元数据仍指向固定官方仓库；镜像实际包为BASE/vVERSION/FILENAME，清单为BASE/releases.json。失败回退GitHub，不接受任意元数据下载地址或未知公钥。Windows桌面壳同样解析该来源偏好，不接收COS凭据。
 
 server/update-download负责逐跳HTTPS、公开DNS结果验证与绑定、重定向/时间/流字节预算、流式写入新文件、精确大小与SHA-256检查；不发送登录Cookie、应用令牌或数据库配置。准备阶段再由release-package使用原固定公钥验证签名、文件、版本、平台及数据格式。ProgramUpdateService对在线下载/验签、离线导入和提交安装串行互斥；网络下载不持有创作维护门禁。只有已准备并再次校验的包才能写pending-update，后续仍由固定scripts/launch.mjs完成备份和切换。
 
 ProgramUpdatePanel只对本次点击产生且仍匹配的下载任务保留自动安装意图，完成后重新检查当前canUpdate、可见性和组件生命周期；有草稿或离开页面时只保留已验证包。重新进入不会自动应用旧任务，不自动刷新；提交apply仍由服务端重新验证主管理员权限和包身份。源配置仅为安装根.worldloom中的非创作偏好，不改变workspace、revision或业务数据库；该偏好不在创作JSON/完整资料恢复的保证范围，换机可重新填写。
 
-scripts/create-update-mirror.mjs从本地公开清单与平铺的原始包生成全新静态镜像，过滤非更新附件/多余字段、拒绝重复或不匹配包，复制后复验并最后写清单；不含签名私钥，也不联网发布。公开beta.18只有Windows x64签名包，Linux/macOS新安装包不能代替；Docker不在Web进程控制宿主机，Electron壳和固定Node运行时不由后端更新替换。当前实现和验证边界见[更新说明](update-strategy.md)及开发日志。
+scripts/create-update-mirror.mjs从本地公开清单与平铺的原始包生成全新静态镜像，过滤非更新附件/多余字段、拒绝重复或不匹配包，复制后复验并最后写清单；不含签名私钥，也不联网发布。scripts/publish-cos-mirror.ts 只同步五平台官方签名更新包与Windows桌面ZIP、签名描述，普通完整安装TAR/CMD ZIP不在白名单。版本对象禁止覆盖，逐包匿名全文SHA校验后才提交净化清单；发布队列中的版本尚不算国内可用。维护SDK隔离在tools/cos-publisher，凭据只注入工作流最终上传步骤，应用和镜像中均不包含它。Docker不在Web进程控制宿主机，Electron壳和固定Node运行时不由后端更新替换。当前实现和验证边界见[更新说明](update-strategy.md)及开发日志。
 
 ## 可丢弃的完整底图显示缓存（2026-10-21本地补丁）
 

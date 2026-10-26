@@ -68,7 +68,7 @@ for (const name of [
 ])
   await cp(path.join(source, 'desktop', name), path.join(payload, 'desktop', name));
 await cp(path.join(source, 'shared/brand.json'), path.join(payload, 'shared/brand.json'));
-for (const name of ['release-trust.json', 'desktop-update-security.cjs'])
+for (const name of ['release-trust.json', 'desktop-update-security.cjs', 'update-sources.json'])
   await cp(path.join(source, 'shared', name), path.join(payload, 'shared', name));
 await cp(path.join(source, 'LICENSE'), path.join(payload, 'LICENSE'));
 const { devDependencies, ...shellPackage } = appPackage;

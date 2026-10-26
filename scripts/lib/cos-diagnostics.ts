@@ -68,6 +68,17 @@ const providerCodes = new Set([
   'SlowDown',
   'InternalError',
   'ServiceUnavailable',
+  'RequestTimeout',
+  'RequestTimeOut',
+  'IncompleteBody',
+  'EntitySizeNotMatch',
+  'InvalidDigest',
+  'ETIMEDOUT',
+  'ESOCKETTIMEDOUT',
+  'ECONNRESET',
+  'EPIPE',
+  'EAI_AGAIN',
+  'ENETUNREACH',
 ]);
 
 export class CosPublishError extends Error {

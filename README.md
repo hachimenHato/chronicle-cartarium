@@ -2,7 +2,7 @@
 
 **为 TRPG 主持人与世界构建者准备的地图、设定、人物关系与剧情工作台。**
 
-通过浏览器使用，部署在自己的电脑或服务器。首次安装明确选择 **本地 SQLite** 或 **MySQL**，本地模式无需另装数据库。中文界面，目前为 **0.2.0-beta.19 公开测试版**。
+通过浏览器使用，部署在自己的电脑或服务器。首次安装明确选择 **本地 SQLite** 或 **MySQL**，本地模式无需另装数据库。中文界面，目前为 **0.2.0-beta.20 公开测试版**。
 
 [下载发行版](https://github.com/hachimenHato/chronicle-cartarium/releases) · [安装与部署](docs/installation.md) · **[各平台更新教程](docs/update-guide.md)** · [腾讯云 COS 更新镜像](docs/tencent-cos.md) · [更新与数据保护](docs/update-strategy.md) · [问题反馈](https://github.com/hachimenHato/chronicle-cartarium/issues)
 
@@ -19,13 +19,13 @@
 
 安装时可选原创日式中世纪剑与魔法范例：85 条世界设定、20 位人物、4 张地图、30 条关系、18 个剧情场景及 GM 计划等。默认不填充。
 
-## beta.19 更新
+## beta.20 更新
 
-新增“检查更新 → 下载并安全更新”，默认从 GitHub 获取适配当前系统、架构的官方签名包，自动验证后进入完整备份、恢复验证与程序切换流程。保留离线导入，提供自建 HTTPS 镜像入口及 GitHub 回退；没有内置国内加速站。未保存草稿、隐藏窗口或离开更新页面会暂停自动安装，不强制刷新创作页面。
+“工作台设置 → 程序更新 → 更新来源与渠道”新增内置的 **国内下载源（腾讯云）**，选择并保存即可，无需填写地址、注册腾讯云或提供密钥。GitHub 仍为默认来源，原有自建 HTTPS 镜像及离线导入保留；Windows 桌面窗口更新沿用同一来源偏好。
 
-Windows 桌面窗口另有“帮助 → 检查桌面程序更新…”：自动下载完整桌面包、验证官方签名、备份、退出并重开原工作台；原 EXE 保留为固定入口，工作台不被模板覆盖。
+国内源同步官方已签名文件，所有文件匿名回读校验通过后才发布更新清单。**内置选项不代表每个新版本已同步完成**：以[同步任务](https://github.com/hachimenHato/chronicle-cartarium/actions/workflows/cos-mirror.yml)最终成功及实际下载验证为准，源不可用或下载失败时尝试 GitHub。原官方验签、完整备份与恢复验证照常执行，资料和数据路径保持；不是无人值守安装。
 
-**旧 beta.18 及之前版本需先离线升级一次；旧 EXE 还需手动换成 beta.19 桌面壳一次，才有原生自动更新菜单。** Windows 桌面/CMD、Linux、macOS、源码/服务器和 Docker 的具体步骤、失败处理与限制见 **[各平台更新教程](docs/update-guide.md)**。地图高倍率浏览优化继续保留，详见[性能说明](docs/map-performance.md)。
+**beta.19 可直接在线升级到 beta.20**，获得内置国内源选项；原 EXE 的自动更新最低版本仍为 beta.19。后端选好内置国内源后，原 beta.19 壳也能直接沿用设置在线升级，无需先切换来源或手填地址。beta.18 及之前需先完成一次离线过渡，旧 EXE 另需手动换壳，见 **[各平台更新教程](docs/update-guide.md)**。本次同时完善 COS 发布器的空桶检查、安全进度提示、并行与长时等待；普通上传默认不启用收费全球加速。地图高倍率浏览优化继续保留，详见[性能说明](docs/map-performance.md)。
 
 ## 界面预览
 
@@ -61,6 +61,8 @@ Windows 桌面窗口另有“帮助 → 检查桌面程序更新…”：自动�
 Windows 另提供独立窗口的**桌面版 ZIP**：完整解压后双击 `Chronicle Cartarium.exe`，无需 CMD、系统浏览器或首次联网安装依赖。原 CMD 版继续保留；桌面版数据与已有工作台使用方式见 [桌面版说明](docs/desktop.md)。
 
 在 [Releases](https://github.com/hachimenHato/chronicle-cartarium/releases) 选择匹配系统和 CPU 的包，解压到**可写的新目录**。Windows 双击 `start.cmd`；Linux 执行 `sh start.sh`；macOS 双击 `start.command` 或执行 `sh start.sh`。
+
+**首次下载与在线更新的覆盖范围不同。** 国内源同步五平台的 `.ccupdate` 以及 Windows 桌面完整 ZIP 和签名描述；Windows 桌面 ZIP 完成同步后可用于国内首次下载。其他 CMD / Linux / macOS 完整安装包目前仍从 GitHub 下载，Docker 镜像和 npm 依赖也不经此源。国内入口、文件路径及同步确认见[首次下载说明](docs/update-guide.md#首次下载安装与国内源覆盖范围)；未同步完成的链接不能使用。
 
 访问 **http://localhost:3001/**，按向导选择数据库、访问方式和主题。登录默认开启，需要自行设置主管理员登录名和密码；也可选择免登录，不要求账号密码，此时无法开启多用户。安装时可直接开启多用户，以后也可在后台调整；多用户开启期间不能关闭登录。没有通用默认密码。CMD/Linux/macOS 包首次启动准备 npm 依赖需要联网；带运行时的包无需另装 Node.js。不要混用各系统的运行时或 `node_modules`。
 
@@ -103,7 +105,7 @@ docker compose -f docker-compose.image.yml up -d
 
 逐步操作见 **[各平台更新教程](docs/update-guide.md)**，保护机制和实测边界见[更新说明](docs/update-strategy.md)。已有数据却出现安装向导时先检查路径，**不要重新初始化**。
 
-维护者可按[腾讯云 COS 镜像教程](docs/tencent-cos.md)配置专用桶、域名和 GitHub Secrets，使公开 Release 发布后自动同步签名更新包。工具只上传白名单，版本文件禁止覆盖，清单最后发布；应用和下载包不需要腾讯云密钥。配置与实际下载验证完成前，不代表已部署可用的国内镜像。
+维护者可按[腾讯云 COS 镜像教程](docs/tencent-cos.md)配置专用桶、域名和 GitHub Secrets，使公开 Release 发布后自动同步签名更新包。工具只上传白名单，版本文件禁止覆盖，清单最后发布；应用和下载包不包含腾讯云密钥。用户选择内置“国内下载源（腾讯云）”即可，实际版本可用性仍以同步完成和公开下载验证为准。
 
 ## 当前边界
 

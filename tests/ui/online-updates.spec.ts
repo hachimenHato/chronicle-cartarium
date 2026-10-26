@@ -1,5 +1,14 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { OnlineUpdateStatus, ProgramUpdateStatus } from '../../shared/update';
+import type {
+  OnlineUpdateSettingsInput,
+  OnlineUpdateStatus,
+  ProgramUpdateStatus,
+} from '../../shared/update';
+import { UPDATE_SOURCES, updateSourceChoice, updateSourceLabel } from '../../shared/update-sources';
+import packageJson from '../../package.json' with { type: 'json' };
+
+const currentVersion = packageJson.version;
+const nextVersion = currentVersion.replace(/\d+$/, (number) => String(Number(number) + 1));
 
 // All real requests go to the isolated 3311 DemoStore. Update downloads and
 // installation are mocked here; this test never contacts a release server or runner.
@@ -30,7 +39,7 @@ async function fixture(page: Page) {
     ).toBeTruthy();
   }
   let online: OnlineUpdateStatus = {
-    currentVersion: '0.2.0-beta.18',
+    currentVersion,
     platform: 'win32',
     architecture: 'x64',
     settings: { source: 'github', channel: 'preview' },
@@ -40,6 +49,7 @@ async function fixture(page: Page) {
   };
   let program: ProgramUpdateStatus = { mode: 'managed', phase: 'idle', message: '可以安全更新。' };
   const calls = { checks: 0, downloads: 0, applies: 0, settings: 0, cancels: 0, localPolls: 0 };
+  const settingsRequests: OnlineUpdateSettingsInput[] = [];
   let settingsError = false;
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -57,14 +67,13 @@ async function fixture(page: Page) {
         ...online,
         checkedAt: new Date().toISOString(),
         release: {
-          version: '0.2.0-beta.19',
+          version: nextVersion,
           name: '界面测试用新版',
           notes: '改善地图与更新体验。',
           publishedAt: '2026-10-22T00:00:00.000Z',
-          releaseUrl:
-            'https://github.com/hachimenHato/chronicle-cartarium/releases/tag/v0.2.0-beta.19',
+          releaseUrl: `https://github.com/hachimenHato/chronicle-cartarium/releases/tag/v${nextVersion}`,
           asset: {
-            name: 'chronicle-cartarium-win-x64.ccupdate',
+            name: `chronicle-cartarium-${nextVersion}-win-x64.ccupdate`,
             bytes: 1000000,
             sha256: 'a'.repeat(64),
           },
@@ -74,16 +83,16 @@ async function fixture(page: Page) {
     }
     if (path === '/api/admin/updates/online/download') {
       calls.downloads += 1;
-      expect(route.request().postDataJSON()).toEqual({ version: '0.2.0-beta.19' });
+      expect(route.request().postDataJSON()).toEqual({ version: nextVersion });
       online = {
         ...online,
         task: {
           id: `download-${calls.downloads}`,
-          version: '0.2.0-beta.19',
+          version: nextVersion,
           phase: 'downloading',
           received: 250000,
           total: 1000000,
-          source: 'github',
+          source: updateSourceChoice(online.settings),
           message: '正在下载更新包。',
         },
       };
@@ -107,14 +116,24 @@ async function fixture(page: Page) {
     }
     if (path === '/api/admin/updates/online/settings') {
       calls.settings += 1;
+      settingsRequests.push(route.request().postDataJSON());
       if (settingsError)
         return route.fulfill({
           status: 422,
           json: { error: 'data_protection', message: '镜像入口暂不可用，请检查配置。' },
         });
+      const input = route.request().postDataJSON() as OnlineUpdateSettingsInput;
+      // Exercise the legacy wire response used by both the backend and beta.19 shell.
       online = {
         ...online,
-        settings: route.request().postDataJSON(),
+        settings:
+          input.source === 'china'
+            ? {
+                source: 'mirror',
+                channel: input.channel,
+                mirrorBaseUrl: UPDATE_SOURCES.china.baseUrl,
+              }
+            : (input as OnlineUpdateStatus['settings']),
         release: undefined,
         checkedAt: undefined,
       };
@@ -151,7 +170,7 @@ async function fixture(page: Page) {
       mode: 'managed',
       phase: 'prepared',
       packageId: 'verified-package',
-      version: '0.2.0-beta.19',
+      version: nextVersion,
       message: '更新包已验证。',
     };
   };
@@ -168,6 +187,7 @@ async function fixture(page: Page) {
   };
   return {
     calls,
+    settingsRequests,
     open,
     prepare,
     setVerifying,
@@ -257,7 +277,7 @@ test('a draft started during download permanently pauses automatic installation 
   await expect(context.panel).toContainText('检测到尚未保存的修改或其他数据操作');
   context.prepare();
   const continueButton = context.panel.getByRole('button', {
-    name: '备份并更新至 0.2.0-beta.19',
+    name: `备份并更新至 ${nextVersion}`,
     exact: true,
   });
   await expect(continueButton).toBeDisabled();
@@ -291,7 +311,7 @@ test('closing settings and refreshing never resumes an old download installation
   context.prepare();
   await context.open();
   await expect(
-    context.panel.getByRole('button', { name: '备份并更新至 0.2.0-beta.19', exact: true }),
+    context.panel.getByRole('button', { name: `备份并更新至 ${nextVersion}`, exact: true }),
   ).toBeEnabled();
   const polls = context.calls.localPolls;
   await expect.poll(() => context.calls.localPolls).toBeGreaterThan(polls);
@@ -299,15 +319,75 @@ test('closing settings and refreshing never resumes an old download installation
   await page.reload();
   await context.open();
   await expect(
-    context.panel.getByRole('button', { name: '备份并更新至 0.2.0-beta.19', exact: true }),
+    context.panel.getByRole('button', { name: `备份并更新至 ${nextVersion}`, exact: true }),
   ).toBeEnabled();
   expect(context.calls.applies).toBe(0);
   expect(context.calls.checks).toBe(1);
 });
 
-test('mirror errors keep the draft, expose no built-in accelerator and remain readable on narrow screens', async ({
+test('built-in domestic source saves without a custom URL, persists and labels downloads correctly', async ({
   page,
 }) => {
+  const context = await fixture(page);
+  await context.open();
+  const { panel, calls, settingsRequests } = context;
+  await panel.locator('.program-update-advanced > summary').click();
+  await expect(
+    panel.getByRole('radio', { name: new RegExp(updateSourceLabel('github')) }),
+  ).toBeChecked();
+  await panel.getByRole('radio', { name: /自建镜像/ }).check();
+  await panel
+    .getByRole('textbox', { name: /^镜像入口地址/ })
+    .fill('https://updates.example.com/unused-mirror');
+  await panel.getByRole('radio', { name: new RegExp(updateSourceLabel('china')) }).check();
+  await expect(panel.getByRole('textbox', { name: /^镜像入口地址/ })).toHaveCount(0);
+  await expect(panel).toContainText('所有来源均会验证官方签名与文件完整性');
+  await expect(panel.getByRole('button', { name: '检查更新', exact: true })).toBeDisabled();
+  await panel.getByRole('button', { name: '保存更新设置', exact: true }).click();
+  await expect(panel.getByRole('button', { name: '检查更新', exact: true })).toBeEnabled();
+  expect(settingsRequests).toEqual([{ source: 'china', channel: 'preview' }]);
+  await expect(panel.locator('.program-online-source strong')).toHaveText(
+    updateSourceLabel('china'),
+  );
+  expect(calls.checks).toBe(0);
+  await page.reload();
+  await context.open();
+  await panel.locator('.program-update-advanced > summary').click();
+  await expect(
+    panel.getByRole('radio', { name: new RegExp(updateSourceLabel('china')) }),
+  ).toBeChecked();
+  await expect(panel.getByRole('button', { name: '保存更新设置', exact: true })).toBeDisabled();
+  // Keep the selected radio as a local draft. Deriving it on every render from
+  // the canonical wire URL would snap a custom-mirror selection back to China.
+  await panel.getByRole('radio', { name: /自建镜像/ }).check();
+  await expect(panel.getByRole('radio', { name: /自建镜像/ })).toBeChecked();
+  await panel
+    .getByRole('textbox', { name: /^镜像入口地址/ })
+    .fill('https://updates.example.com/custom');
+  await expect(panel.getByRole('radio', { name: /自建镜像/ })).toBeChecked();
+  await expect(panel.getByRole('button', { name: '保存更新设置', exact: true })).toBeEnabled();
+  await panel.getByRole('radio', { name: new RegExp(updateSourceLabel('china')) }).check();
+  await expect(panel.getByRole('button', { name: '保存更新设置', exact: true })).toBeDisabled();
+  await panel.locator('.program-source-options').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: '.runtime/online-updates-domestic-desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await panel.locator('.program-source-options').scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+  const domesticCard = await panel
+    .getByRole('radio', { name: new RegExp(updateSourceLabel('china')) })
+    .locator('..')
+    .boundingBox();
+  expect(domesticCard?.width).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: '.runtime/online-updates-domestic-mobile.png' });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await panel.getByRole('button', { name: '检查更新', exact: true }).click();
+  await panel.getByRole('button', { name: '下载并安全更新', exact: true }).click();
+  await expect(panel.locator('.program-download-footer')).toContainText(updateSourceLabel('china'));
+  expect(calls.downloads).toBe(1);
+  expect(calls.applies).toBe(0);
+});
+
+test('mirror errors keep the draft and remain readable on narrow screens', async ({ page }) => {
   const context = await fixture(page);
   await context.open();
   const panel = context.panel;
@@ -320,7 +400,7 @@ test('mirror errors keep the draft, expose no built-in accelerator and remain re
   await panel.getByRole('button', { name: '保存更新设置', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('镜像入口暂不可用');
   await expect(mirror).toHaveValue('https://updates.example.com/cartarium');
-  await expect(panel).toContainText('目前没有内置国内加速服务');
+  await expect(panel).toContainText('使用内置国内源无需配置此地址');
   await expect(panel.getByRole('button', { name: '检查更新', exact: true })).toBeDisabled();
   await expect(panel.getByRole('button', { name: '保存更新设置', exact: true })).toBeEnabled();
   expect(context.calls.settings).toBe(1);

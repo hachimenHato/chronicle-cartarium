@@ -7,7 +7,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { EventEmitter } from 'node:events';
 import { DesktopUpdateService, desktopTree, selectDesktopRelease } from '../server/desktop-update';
-import { UPDATE_REPOSITORY } from '../server/online-update';
+import { UPDATE_REPOSITORY, UPDATE_CATALOG } from '../server/online-update';
+import { UPDATE_SOURCES } from '../shared/update-sources';
 const require = createRequire(import.meta.url);
 const {
   digest,
@@ -15,7 +16,7 @@ const {
   releaseDirectory,
 } = require('../shared/desktop-update-security.cjs');
 const { run: handoff } = require('../desktop/shell-update-helper.cjs');
-const { ShellUpdater } = require('../desktop/shell-update.cjs');
+const { ShellUpdater, desktopUpdateSourceLabel } = require('../desktop/shell-update.cjs');
 const version = '999.0.0-beta.2';
 const current = '0.2.0-beta.19';
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -160,6 +161,118 @@ test('desktop discovery requires both canonical ZIP and signed descriptor assets
     /重复/,
   );
 });
+
+test('native desktop forwards the legacy-safe China selection to the worker without inventing another address', async () => {
+  const settings = {
+    source: 'mirror',
+    channel: 'preview',
+    mirrorBaseUrl: UPDATE_SOURCES.china.baseUrl,
+  };
+  const updater = new ShellUpdater({
+    getBackend: () => ({ origin: 'http://127.0.0.1:3313' }),
+    window: {
+      webContents: {
+        session: {
+          fetch: async (url: string) => ({
+            ok: true,
+            json: async () =>
+              url.endsWith('/api/status') ? { actor: { role: 'owner' } } : { settings },
+          }),
+        },
+      },
+    },
+  });
+  assert.deepEqual(await updater.ownerSettings(), settings);
+  assert.equal(desktopUpdateSourceLabel(settings), UPDATE_SOURCES.china.label);
+  assert.equal(
+    desktopUpdateSourceLabel({ ...settings, mirrorBaseUrl: 'https://cdn.example/custom' }),
+    UPDATE_SOURCES.mirror.label,
+  );
+  // Desktop CJS and its TypeScript worker read the same public preset rather than separate URLs.
+  assert.deepEqual(require('../shared/update-sources.json'), UPDATE_SOURCES);
+});
+
+test('desktop China discovery ignores supplied custom addresses and falls back on invalid catalogs', async () => {
+  for (const failure of [false, true]) {
+    const calls: string[] = [];
+    const service = new DesktopUpdateService(
+      current,
+      { source: 'china', channel: 'preview', mirrorBaseUrl: 'https://evil.example' },
+      {
+        readJson: async (url) => {
+          calls.push(url);
+          return failure && url !== UPDATE_CATALOG ? { invalid: true } : catalog();
+        },
+      },
+    );
+    assert.deepEqual(service.settings, {
+      source: 'mirror',
+      channel: 'preview',
+      mirrorBaseUrl: UPDATE_SOURCES.china.baseUrl,
+    });
+    assert.equal((await service.check())?.version, version);
+    assert.deepEqual(calls, [
+      `${UPDATE_SOURCES.china.baseUrl}/releases.json`,
+      ...(failure ? [UPDATE_CATALOG] : []),
+    ]);
+  }
+});
+
+for (const fallback of ['none', 'metadata', 'archive'] as const)
+  test(`desktop China staging verifies signed metadata and the full tree, fallback=${fallback}`, async (t) => {
+    const base = await temporary(t),
+      { signed, trust } = fixtureSignature();
+    const calls: string[] = [];
+    const keep = path.join(base, 'workspace/data/keep.txt');
+    await mkdir(path.dirname(keep), { recursive: true });
+    await writeFile(keep, 'latest-creative-content');
+    const service = new DesktopUpdateService(
+      current,
+      { source: 'mirror', channel: 'preview', mirrorBaseUrl: UPDATE_SOURCES.china.baseUrl },
+      {
+        trust,
+        readJson: async (url) => {
+          calls.push(url);
+          if (fallback === 'metadata' && !url.startsWith(UPDATE_REPOSITORY))
+            return { manifest: signed.manifest, signature: 'invalid' };
+          return signed;
+        },
+        download: async (url, file, _expected, progress) => {
+          calls.push(url);
+          if (fallback === 'archive' && !url.startsWith(UPDATE_REPOSITORY))
+            throw new Error('source unavailable');
+          await writeFile(file, 'zip', { flag: 'wx' });
+          progress(3);
+        },
+        extract: async (_file, destination) => {
+          for (const [name, content] of Object.entries(files)) {
+            const file = path.join(destination, name);
+            await mkdir(path.dirname(file), { recursive: true });
+            await writeFile(file, content);
+          }
+        },
+      },
+    );
+    const candidate = selectDesktopRelease(catalog(), current, 'preview')!;
+    const staged = await service.stage(base, candidate, new AbortController().signal, () => {});
+    const china = `${UPDATE_SOURCES.china.baseUrl}/v${version}/chronicle-cartarium-${version}-windows-desktop-x64`;
+    const github = `${UPDATE_REPOSITORY}/releases/download/v${version}/chronicle-cartarium-${version}-windows-desktop-x64`;
+    assert.deepEqual(calls, [
+      `${china}.update.json`,
+      ...(fallback === 'metadata' ? [`${github}.update.json`] : []),
+      `${china}.zip`,
+      ...(fallback === 'archive' ? [`${github}.zip`] : []),
+    ]);
+    assert.equal(staged.version, version);
+    assert.equal(
+      (await desktopTree(path.join(releaseDirectory(base, staged.releaseId), 'app'))).sha256,
+      signed.manifest.treeSha256,
+    );
+    assert.equal(await readFile(keep, 'utf8'), 'latest-creative-content');
+    await assert.rejects(readFile(path.join(base, '.desktop/current-shell.json')), {
+      code: 'ENOENT',
+    });
+  });
 
 test('desktop staging verifies every extracted file and never copies into an existing workspace', async (t) => {
   const base = await temporary(t),

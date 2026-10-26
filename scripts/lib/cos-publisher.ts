@@ -5,6 +5,7 @@ import { createHash, verify } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { Parser } from 'tar';
 import { pipeline } from 'node:stream/promises';
+import { setTimeout as wait } from 'node:timers/promises';
 import { releaseManifestSchema, compareVersions } from '../../server/release-package';
 import { releasePublicKeys } from '../../shared/release-trust';
 import { validateUpdateUrl } from '../../server/update-download';
@@ -47,6 +48,7 @@ export interface CosStore {
     sha256: string;
     immutable: boolean;
     onProgress?: (progress: { loaded?: unknown }) => void;
+    onRetry?: (attempt: number) => void;
   }): Promise<void>;
 }
 export function loadCosConfig(env: NodeJS.ProcessEnv): CosConfig {
@@ -335,6 +337,12 @@ export async function publishCosMirror({
         immutable: true,
         ...(onProgress
           ? {
+              onRetry: (attempt: number) =>
+                onProgress({ stage: 'upload-retry', ...counts, attempt }),
+            }
+          : {}),
+        ...(onProgress
+          ? {
               onProgress: (progress: { loaded?: unknown }) => {
                 if (typeof progress?.loaded !== 'number' || !Number.isFinite(progress.loaded))
                   return;
@@ -362,6 +370,12 @@ export async function publishCosMirror({
       try {
         await publishFile(index, plan.files[index]);
       } catch (error) {
+        onProgress?.({
+          stage: 'file-failed',
+          fileIndex: index + 1,
+          fileCount: plan.files.length,
+          bytes: plan.files[index].bytes,
+        });
         if (!failed) {
           failed = true;
           firstError = error;
@@ -421,11 +435,44 @@ export interface CosSdkClient {
   getBucketVersioning(params: Record<string, unknown>): Promise<any>;
   putObject(params: Record<string, unknown>): Promise<any>;
 }
+// SDK stream PUTs cannot be replayed automatically. Only known transient errors
+// may start a fresh attempt; an arbitrary HTTP 400 or permission error is final.
+function retryableUpload(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { statusCode?: unknown; code?: unknown; error?: { Code?: unknown } };
+  const status = value.statusCode;
+  const code = value.error?.Code ?? value.code;
+  if (typeof status === 'number') {
+    if (status >= 500 && status <= 599) return true;
+    if (status === 408 || status === 429) return true;
+    return (
+      status === 400 &&
+      typeof code === 'string' &&
+      ['RequestTimeout', 'RequestTimeOut', 'IncompleteBody'].includes(code)
+    );
+  }
+  return (
+    typeof code === 'string' &&
+    ['ETIMEDOUT', 'ESOCKETTIMEDOUT', 'ECONNRESET', 'EPIPE', 'EAI_AGAIN', 'ENETUNREACH'].includes(
+      code,
+    )
+  );
+}
+function objectAlreadyPresent(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { statusCode?: unknown; code?: unknown; error?: { Code?: unknown } };
+  const code = value.error?.Code ?? value.code;
+  return (
+    (value.statusCode === 409 || value.statusCode === 412) &&
+    (code === 'ObjectAlreadyExists' || code === 'PreconditionFailed')
+  );
+}
 export function createCosStore(
   config: CosConfig,
   env: NodeJS.ProcessEnv,
   client?: CosSdkClient,
   uploadClient?: CosSdkClient,
+  dependencies?: { wait?: (milliseconds: number) => Promise<unknown> },
 ): CosStore {
   const accelerate = env.COS_UPLOAD_ACCELERATE;
   need(
@@ -502,27 +549,54 @@ export function createCosStore(
       }
     },
     async put(input) {
-      try {
-        await uploadCos.putObject({
-          ...base,
-          Key: input.key,
-          Body: input.body || createReadStream(input.file!),
-          ContentLength: input.bytes,
-          ContentMD5: input.md5,
-          CacheControl: input.immutable
-            ? 'public, max-age=31536000, immutable'
-            : 'no-cache, max-age=0, must-revalidate',
-          ContentType: input.key.endsWith('.json')
-            ? 'application/json; charset=utf-8'
-            : 'application/octet-stream',
-          Headers: {
-            'x-cos-meta-sha256': input.sha256,
-            ...(input.immutable ? { 'x-cos-forbid-overwrite': 'true' } : {}),
-          },
-          ...(input.onProgress ? { onProgress: input.onProgress } : {}),
-        });
-      } catch (error) {
-        throw new CosPublishError('COS_WRITE', error);
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const body = input.body || createReadStream(input.file!);
+        // An SDK failure can occur before it attaches a stream listener. File
+        // open/close errors arriving after that failure must not escape as an
+        // uncaught exception; the SDK still receives its own stream events.
+        if (!Buffer.isBuffer(body)) body.on('error', () => {});
+        let failure: unknown;
+        try {
+          await uploadCos.putObject({
+            ...base,
+            Key: input.key,
+            Body: body,
+            ContentLength: input.bytes,
+            ContentMD5: input.md5,
+            CacheControl: input.immutable
+              ? 'public, max-age=31536000, immutable'
+              : 'no-cache, max-age=0, must-revalidate',
+            ContentType: input.key.endsWith('.json')
+              ? 'application/json; charset=utf-8'
+              : 'application/octet-stream',
+            Headers: {
+              'x-cos-meta-sha256': input.sha256,
+              ...(input.immutable ? { 'x-cos-forbid-overwrite': 'true' } : {}),
+            },
+            ...(input.onProgress ? { onProgress: input.onProgress } : {}),
+          });
+          return;
+        } catch (error) {
+          failure = error;
+        } finally {
+          if (!Buffer.isBuffer(body)) body.destroy();
+        }
+        const transient = retryableUpload(failure);
+        // Mutable catalog writes retain their existing read-after-error commit
+        // handling. Never blindly replay a catalog or change a version object.
+        if (!input.immutable || (!transient && !objectAlreadyPresent(failure)))
+          throw new CosPublishError('COS_WRITE', failure);
+        // The server may have committed the full object but lost its reply.
+        // Size alone never advertises it: publishCosMirror still requires the
+        // original signed SHA through an anonymous full HTTPS readback.
+        const existing = await head(input.key);
+        if (existing) {
+          need(existing.bytes === input.bytes, 'EXISTING_OBJECT_CHANGED');
+          return;
+        }
+        if (!transient || attempt === 3) throw new CosPublishError('COS_WRITE', failure);
+        await (dependencies?.wait || wait)(attempt * 3000);
+        input.onRetry?.(attempt + 1);
       }
     },
   };

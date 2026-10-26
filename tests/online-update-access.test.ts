@@ -7,6 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { InstallationManager } from '../server/installation';
 import { readConfig } from '../server/config';
 import { createApp } from '../server/app';
+import { UPDATE_SOURCES } from '../shared/update-sources';
 
 test('online settings/check/download/cancel and offline apply are owner-only on the server', async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'chronicle-update-access-'));
@@ -109,6 +110,29 @@ test('online settings/check/download/cancel and offline apply are owner-only on 
       )
     ).status,
     422,
+  );
+  const china = await send(
+    '/api/admin/updates/online/settings',
+    'PUT',
+    {
+      source: 'china',
+      channel: 'preview',
+      mirrorBaseUrl: 'http://127.0.0.1',
+    },
+    ownerCookie,
+  );
+  assert.equal(china.status, 200);
+  const compatibleSettings = {
+    source: 'mirror',
+    channel: 'preview',
+    mirrorBaseUrl: UPDATE_SOURCES.china.baseUrl,
+  };
+  assert.deepEqual((await china.json()).settings, compatibleSettings);
+  assert.deepEqual(
+    JSON.parse(
+      await readFile(path.join(directory, '.worldloom', 'online-update-settings.json'), 'utf8'),
+    ),
+    compatibleSettings,
   );
   assert.equal(
     (

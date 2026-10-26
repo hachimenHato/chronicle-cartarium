@@ -42,3 +42,23 @@ test('COS diagnostics recognize the SDK top-level code without retaining its ori
   );
   assert.equal(formatCosDiagnostic(new CosPublishError('BUCKET_VERSIONING')), 'BUCKET_VERSIONING');
 });
+
+test('COS diagnostics distinguish fixed timeout and truncated-body codes without exposing raw SDK details', () => {
+  for (const code of [
+    'RequestTimeout',
+    'RequestTimeOut',
+    'IncompleteBody',
+    'EntitySizeNotMatch',
+    'InvalidDigest',
+    'ETIMEDOUT',
+    'ECONNRESET',
+  ]) {
+    const error = new CosPublishError('COS_WRITE', {
+      statusCode: 400,
+      error: { Code: code, Message: 'FAKE_SECRET' },
+      url: 'https://not-contacted.example/?signature=FAKE_SECRET',
+    });
+    assert.equal(formatCosDiagnostic(error), `COS_WRITE / HTTP_400 / ${code}`);
+    assert.doesNotMatch(JSON.stringify(error), /FAKE_SECRET|signature=/);
+  }
+});

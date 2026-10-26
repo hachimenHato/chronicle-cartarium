@@ -1,0 +1,12 @@
+{
+  "github": {
+    "label": "GitHub 官方源"
+  },
+  "china": {
+    "label": "国内下载源（腾讯云）",
+    "baseUrl": "https://files.hachimen.info/chronicle-cartarium/updates"
+  },
+  "mirror": {
+    "label": "自建镜像"
+  }
+}

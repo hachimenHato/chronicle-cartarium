@@ -4,6 +4,8 @@ export type CosProgressStage =
   | 'read-catalog'
   | 'file-start'
   | 'upload-progress'
+  | 'upload-retry'
+  | 'file-failed'
   | 'file-readback'
   | 'file-verified'
   | 'commit-catalog'
@@ -15,6 +17,7 @@ export interface CosProgressEvent {
   fileCount?: number;
   loaded?: number;
   bytes?: number;
+  attempt?: number;
 }
 
 const MIB = 1024 ** 2;
@@ -27,6 +30,8 @@ const labels: Record<CosProgressStage, string> = {
   'read-catalog': '正在读取现有更新清单。',
   'file-start': '开始处理更新文件。',
   'upload-progress': '正在上传更新文件。',
+  'upload-retry': '网络传输中断，正在重新上传更新文件。',
+  'file-failed': '更新文件处理失败，停止领取新文件并等待在途任务结束。',
   'file-readback': '正在匿名下载校验更新文件。',
   'file-verified': '更新文件已通过公开下载校验。',
   'commit-catalog': '正在发布更新清单。',
@@ -66,6 +71,7 @@ export function createCosProgressLogger(
       const fileCount = integer(event.fileCount, 1, MAX_FILE_COUNT);
       const bytes = integer(event.bytes, 1, MAX_FILE_BYTES);
       const loaded = integer(event.loaded, 0, MAX_FILE_BYTES);
+      const attempt = integer(event.attempt, 2, 3);
       const validPosition =
         fileIndex !== undefined && (fileCount === undefined || fileIndex <= fileCount);
       const position = validPosition
@@ -77,6 +83,7 @@ export function createCosProgressLogger(
 
       if (stage === 'verify') uploads.clear();
       if (stage === 'file-start') uploads.delete(identity);
+      if (stage === 'upload-retry') uploads.delete(identity);
       if (stage === 'upload-progress') {
         if (bytes === undefined || loaded === undefined || loaded > bytes) return;
         const time = integer(now(), 0, Number.MAX_SAFE_INTEGER);
@@ -101,6 +108,12 @@ export function createCosProgressLogger(
         write(`正在匿名下载校验${position}。`);
       } else if (stage === 'file-verified') {
         write(`${position}已通过公开下载校验。`);
+      } else if (stage === 'upload-retry') {
+        write(
+          `${position}传输中断，已确认对象尚未提交${attempt === undefined ? '' : `；开始第 ${attempt}/3 次上传`}。`,
+        );
+      } else if (stage === 'file-failed') {
+        write(`${position}处理失败；停止领取新文件，等待其他在途任务结束。`);
       } else {
         write(labels[stage]);
       }
