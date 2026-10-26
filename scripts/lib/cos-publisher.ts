@@ -12,6 +12,11 @@ import { validateUpdateUrl } from '../../server/update-download';
 import type { PublicMirrorRelease } from '../create-update-mirror.mjs';
 import { CosPublishError } from './cos-diagnostics';
 import type { CosProgressEvent } from './cos-progress';
+import {
+  COS_MULTIPART_THRESHOLD,
+  uploadCosMultipart,
+  type CosMultipartClient,
+} from './cos-multipart';
 export { CosPublishError } from './cos-diagnostics';
 const require = createRequire(import.meta.url);
 // The builder strips all fields except the fixed public GitHub release contract.
@@ -49,6 +54,8 @@ export interface CosStore {
     immutable: boolean;
     onProgress?: (progress: { loaded?: unknown }) => void;
     onRetry?: (attempt: number) => void;
+    onPartRetry?: (attempt: number, partNumber: number, partCount: number) => void;
+    onCleanupFailure?: () => void;
   }): Promise<void>;
 }
 export function loadCosConfig(env: NodeJS.ProcessEnv): CosConfig {
@@ -339,6 +346,10 @@ export async function publishCosMirror({
           ? {
               onRetry: (attempt: number) =>
                 onProgress({ stage: 'upload-retry', ...counts, attempt }),
+              onPartRetry: (attempt: number, partNumber: number, partCount: number) =>
+                onProgress({ stage: 'part-retry', ...counts, attempt, partNumber, partCount }),
+              onCleanupFailure: () =>
+                onProgress({ stage: 'multipart-abort-unconfirmed', ...counts }),
             }
           : {}),
         ...(onProgress
@@ -429,7 +440,7 @@ export async function publishCosMirror({
     publicBaseUrl: config.publicBaseUrl,
   };
 }
-export interface CosSdkClient {
+export interface CosSdkClient extends Partial<CosMultipartClient> {
   headObject(params: Record<string, unknown>): Promise<any>;
   getObject(params: Record<string, unknown>): Promise<any>;
   getBucketVersioning(params: Record<string, unknown>): Promise<any>;
@@ -549,6 +560,17 @@ export function createCosStore(
       }
     },
     async put(input) {
+      if (input.immutable && input.file && input.bytes >= COS_MULTIPART_THRESHOLD) {
+        await uploadCosMultipart({
+          client: uploadCos,
+          base,
+          input: { ...input, file: input.file },
+          head,
+          retryable: retryableUpload,
+          wait: dependencies?.wait,
+        });
+        return;
+      }
       for (let attempt = 1; attempt <= 3; attempt++) {
         const body = input.body || createReadStream(input.file!);
         // An SDK failure can occur before it attaches a stream listener. File

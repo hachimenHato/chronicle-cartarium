@@ -85,7 +85,15 @@ COS 支持直接托管源站域名的 HTTPS 证书，因此这套基础方案不
   "statement": [
     {
       "effect": "allow",
-      "action": ["name/cos:PutObject", "name/cos:HeadObject", "name/cos:GetObject"],
+      "action": [
+        "name/cos:PutObject",
+        "name/cos:HeadObject",
+        "name/cos:GetObject",
+        "name/cos:InitiateMultipartUpload",
+        "name/cos:UploadPart",
+        "name/cos:CompleteMultipartUpload",
+        "name/cos:AbortMultipartUpload"
+      ],
       "resource": ["qcs::cos:REGION:uid/APPID:BUCKET-APPID/chronicle-cartarium/updates/*"]
     },
     {
@@ -97,7 +105,9 @@ COS 支持直接托管源站域名的 HTTPS 证书，因此这套基础方案不
 }
 ```
 
-第一条只允许在更新前缀上传、核对文件；第二条只读检查这个桶的版本控制状态，资源格式依腾讯云桶级 API 规定包含 `/*`，**没有授予全桶对象读取**。未授予删除文件、列桶、修改 ACL、桶策略、版本控制或其他桶权限。这里使用简单上传，不需要额外的分块上传权限。[CAM 用户策略配置](https://cloud.tencent.com/document/product/436/68280)、[COS API 授权指引](https://cloud.tencent.com/document/product/436/31923)、[GetBucketVersioning 资源格式](https://cloud.tencent.com/document/product/598/69901)
+第一条只允许在更新前缀上传、核对文件及处理本项目的分块上传；第二条只读检查这个桶的版本控制状态，资源格式依腾讯云桶级 API 规定包含 `/*`，**没有授予全桶对象读取**。没有授予删除已完成对象、列桶、修改 ACL、桶策略、版本控制或其他桶权限。`AbortMultipartUpload` 只用于舍弃发布器本轮创建但未完成的分块任务，不删除已完成版本。程序不列举或接管其他上传任务，也不需要 `ListParts` / `ListMultipartUploads`。[CAM 用户策略配置](https://cloud.tencent.com/document/product/436/68280)、[COS API 授权指引](https://cloud.tencent.com/document/product/436/31923)、[GetBucketVersioning 资源格式](https://cloud.tencent.com/document/product/598/69901)
+
+**按旧教程配置过的维护者**：在现有项目专用策略的第一条 `action` 数组中，补充上面四个分块动作，保留原来的资源范围和其他读取动作；不需要重新创建桶、换密钥或把密钥发给任何人。腾讯云把分块动作与 `PutObject` 分别授权，只有简单上传权限不能完成分块上传。更新后的发布器用短分块处理大文件，权限不足时会明确报 `COS_MULTIPART_PERMISSION`，不会悄悄退回耗时的整包上传或启用收费加速。[腾讯云分块授权说明](https://cloud.tencent.com/document/product/436/65644)
 
 为这个子用户创建 API 密钥。**不要把 SecretId、SecretKey 或临时 Token 发到聊天、Issue、README、源码或 Release。** 下一节由你直接填入 GitHub 的加密 Secrets。此专用子账号的长期密钥便于无人值守发布；应定期轮换。临时凭据也可用，但必须同时填 Token，过期后需要更新；它们不会自行续期。[腾讯云 SDK 凭据建议](https://cloud.tencent.com/document/product/436/8629)
 
@@ -178,9 +188,11 @@ node --env-file=.runtime/cos-publisher.env --import tsx scripts/publish-cos-mirr
 
 首次同步会上传各平台更新文件，再逐个匿名下载核对完整内容，跨境网络较慢时需要等待。日志显示当前文件序号、上传 MiB 进度及回读校验阶段；上传进度限频输出。普通线路最多并行处理三个不同文件，每个文件仍完整上传并核验，全部成功后才提交清单。维护者工作流最多等待 360 分钟，公开回读单文件总时限为 3 小时，连接/响应头和无数据等待仍受原超时保护。应用自身的更新下载等待设置不受影响。
 
-不降低完整性校验或改成公开写入。简单上传完整结束后对象才可见，上传期间看到该文件 404 不代表失败；以工作流最终状态为准。若任务被中断，已完整上传的相同文件可在重跑时复用并重新核验，未完成的单次简单上传需重新开始，不能把它称作字节级断点续传。同步由 GitHub 云端执行，关闭个人电脑、退出浏览器不会终止任务。
+不降低完整性校验或改成公开写入。文件完成上传或分块合并后才作为完整对象可见，上传期间看到该文件 404 不代表失败；以工作流最终状态为准。若任务被中断，已完整上传的相同文件可在重跑时复用并重新核验。大文件按 4 MiB 分块，本轮中断只重试失败分块，已经成功的块不重复上传；不跨云端执行机续传，新的工作流仍需重新开始未完成文件。同步由 GitHub 云端执行，关闭个人电脑、退出浏览器不会终止任务。
 
-已知网络中断、超时与可重试的服务端 5xx 最多尝试 3 次；每次先 HEAD 复核，确需上传时重新打开文件流，已完整对象复用后仍须匿名全文 SHA 校验。任意 HTTP 400、403、同名对象长度冲突等永久错误不重试，不扩大权限、不覆盖版本文件，也不是字节级续传。只看到 HTTP 400 时不能据此断定具体是超时，需要保留安全诊断进一步核查。
+已知网络中断、超时与可重试的服务端 5xx 允许有界重试；大文件的每个分块最多进行 3 次应用层上传尝试，每次创建该分块的新只读流。小文件仍采用简单上传和原来的 HEAD 复核；已完整对象复用后仍须匿名全文 SHA 校验。未识别的 HTTP 400、权限 403、同名对象长度冲突等永久错误不盲目重试，不覆盖版本文件；明确识别为请求超时或请求体不完整的 400 才在白名单内。初始化与完成等小请求还受固定 SDK 自身的有界重试约束。只看到 HTTP 400 时不能据此断定具体是超时，需要保留安全诊断进一步核查。
+
+分块初始化保存整文件 SHA 元数据，本地所有块的整文件 SHA 与已验证的发行摘要一致后才请求合并，完成请求再次携带禁止覆盖头；合并后仍匿名下载核验，全部版本文件通过后才发布清单。发布器只舍弃自己本轮创建且收到 ID 的分块会话，不枚举、删除或接管其他任务；已完成会话的舍弃请求只会返回不存在，不删除已完成对象。初始化回执丢失时，SDK 的内部重试可能创建未返回 ID 的会话，发布器无法确认其归属；这类会话及强制终止后未清理的分块需由维护者在专用桶控制台检查处理，不要删除已完成版本文件。SDK 高级自动分块接口未被采用，避免其完成请求丢失禁止覆盖头。[Complete Multipart Upload 防覆盖说明](https://cloud.tencent.com/document/product/436/7742)
 
 失败日志只输出固定诊断代码、合法 HTTP 状态与白名单中的腾讯云错误名称，不输出原始 SDK 异常、签名链接、请求头或凭据。例如 `COS_BUCKET / HTTP_403 / AccessDenied` 表示检查桶版本控制时被拒绝，`COS_HEAD / HTTP_403` 表示查询对象被拒绝，`COS_WRITE / HTTP_403 / AccessDenied` 表示上传被拒绝；先检查对应子账号权限，不要通过公开写入权限来绕过。
 
@@ -188,7 +200,7 @@ node --env-file=.runtime/cos-publisher.env --import tsx scripts/publish-cos-mirr
 | ------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | 工作流没运行                         | 仓库级 `COS_ENABLED=true`；首次旧版需手动运行；工作流是否已在 `main`                             |
 | 等待审批、环境被拒绝或找不到 Secrets | 是否使用 `cos-production` 环境；是否分别允许分支 `main` 与标签 `v*`；是否等待 Required reviewers |
-| 上传 403                             | 子用户策略中的 APPID、地域、完整桶名和目录是否一致；四种必要动作是否齐全                         |
+| 上传 403                             | 子用户策略中的 APPID、地域、完整桶名和目录是否一致；上方策略动作是否齐全，尤其四项分块权限       |
 | 匿名下载 403                         | prefix 公共策略、HTTPS 条件、桶的公共访问阻止设置及空 Referer；不能用加进公开链接的临时签名绕过  |
 | 证书或域名错误                       | CNAME 指向新桶；COS 绑定的是 `files.hachimen.info`；证书覆盖此域名且未过期                       |
 | 版本控制检查失败                     | 是否误选已有桶或已启用版本控制；使用全新的专用桶，不更改其他业务桶                               |

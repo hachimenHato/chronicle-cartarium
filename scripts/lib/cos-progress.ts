@@ -5,6 +5,8 @@ export type CosProgressStage =
   | 'file-start'
   | 'upload-progress'
   | 'upload-retry'
+  | 'part-retry'
+  | 'multipart-abort-unconfirmed'
   | 'file-failed'
   | 'file-readback'
   | 'file-verified'
@@ -18,6 +20,8 @@ export interface CosProgressEvent {
   loaded?: number;
   bytes?: number;
   attempt?: number;
+  partNumber?: number;
+  partCount?: number;
 }
 
 const MIB = 1024 ** 2;
@@ -31,6 +35,8 @@ const labels: Record<CosProgressStage, string> = {
   'file-start': '开始处理更新文件。',
   'upload-progress': '正在上传更新文件。',
   'upload-retry': '网络传输中断，正在重新上传更新文件。',
+  'part-retry': '当前分块传输中断，正在重试当前分块。',
+  'multipart-abort-unconfirmed': '当前分块会话的清理结果尚未确认，已保留固定失败诊断。',
   'file-failed': '更新文件处理失败，停止领取新文件并等待在途任务结束。',
   'file-readback': '正在匿名下载校验更新文件。',
   'file-verified': '更新文件已通过公开下载校验。',
@@ -72,6 +78,8 @@ export function createCosProgressLogger(
       const bytes = integer(event.bytes, 1, MAX_FILE_BYTES);
       const loaded = integer(event.loaded, 0, MAX_FILE_BYTES);
       const attempt = integer(event.attempt, 2, 3);
+      const partNumber = integer(event.partNumber, 1, 10000);
+      const partCount = integer(event.partCount, 1, 10000);
       const validPosition =
         fileIndex !== undefined && (fileCount === undefined || fileIndex <= fileCount);
       const position = validPosition
@@ -84,6 +92,7 @@ export function createCosProgressLogger(
       if (stage === 'verify') uploads.clear();
       if (stage === 'file-start') uploads.delete(identity);
       if (stage === 'upload-retry') uploads.delete(identity);
+      if (stage === 'part-retry') uploads.delete(identity);
       if (stage === 'upload-progress') {
         if (bytes === undefined || loaded === undefined || loaded > bytes) return;
         const time = integer(now(), 0, Number.MAX_SAFE_INTEGER);
@@ -114,6 +123,19 @@ export function createCosProgressLogger(
         );
       } else if (stage === 'file-failed') {
         write(`${position}处理失败；停止领取新文件，等待其他在途任务结束。`);
+      } else if (stage === 'part-retry') {
+        if (
+          partNumber === undefined ||
+          partCount === undefined ||
+          partNumber > partCount ||
+          attempt === undefined
+        )
+          return;
+        write(
+          `${position}第 ${partNumber}/${partCount} 块传输中断；开始第 ${attempt}/3 次分块上传，已完成分块保留。`,
+        );
+      } else if (stage === 'multipart-abort-unconfirmed') {
+        write(`${position}的本次分块会话清理尚未确认；未删除任何已完成对象。`);
       } else {
         write(labels[stage]);
       }

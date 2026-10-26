@@ -19,6 +19,15 @@ const stages = new Set([
   'COS_HEAD',
   'COS_HEADERS',
   'COS_READ',
+  'COS_MULTIPART_SDK',
+  'COS_MULTIPART_FILE',
+  'COS_MULTIPART_INIT',
+  'COS_MULTIPART_UPLOAD_ID',
+  'COS_MULTIPART_PART',
+  'COS_MULTIPART_ETAG',
+  'COS_MULTIPART_COMPLETE',
+  'COS_MULTIPART_PERMISSION',
+  'COS_MULTIPART_ABORT',
   'COS_WRITE',
   'COS_SDK',
   'CREDENTIALS',
@@ -79,6 +88,9 @@ const providerCodes = new Set([
   'EPIPE',
   'EAI_AGAIN',
   'ENETUNREACH',
+  'NoSuchUpload',
+  'InvalidPart',
+  'InvalidPartOrder',
 ]);
 
 export class CosPublishError extends Error {

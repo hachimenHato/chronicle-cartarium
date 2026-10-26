@@ -37,3 +37,5 @@ Windows 便携桌面新增帮助菜单自动更新，使用原 Ed25519 信任密
 
 
 beta.20 内置国内更新源：shared/update-sources.json 是公开源名称/地址的唯一来源，TS 与桌面更新共用。source=china 是新界面的请求别名，服务端规范化为旧协议source=mirror与固定国内URL，旧beta.19桌面壳仍可自动升级；source=mirror保留原公开HTTPS校验。下载源不改变数据路径、备份流程或Ed25519信任。已有源偏好与GitHub默认均保持，COS同步完成与公开逐包核验前不宣称已可用。
+
+维护者上传分块由cos-multipart.ts实现，只有本轮收到的UploadId可清理，Complete必须保留forbid头。SDK小元数据请求有自身有界重试，不宣称全API线请求最多3次。权限见最新main的tencent-cos.md，旧beta.20 tag教程未含新增权限。已发布应用附件/信任不随维护补丁改变。
