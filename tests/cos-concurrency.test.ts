@@ -11,6 +11,7 @@ import {
 } from '../scripts/lib/cos-publisher';
 import type { PublicMirrorRelease } from '../scripts/create-update-mirror.mjs';
 import type { CosProgressEvent } from '../scripts/lib/cos-progress';
+import { createPublicVerifier } from '../scripts/lib/cos-public-verifier';
 
 const config = loadCosConfig({
   COS_BUCKET: 'concurrency-fixture-1250000000',
@@ -246,6 +247,54 @@ test('COS publication keeps its default serial behavior', { timeout: 5000 }, asy
   await publishing;
   assert.equal(f.stats().maxActive, 1);
 });
+
+test(
+  'transient anonymous readback retries keep uploaded objects and block the catalog until verified',
+  { timeout: 5000 },
+  async () => {
+    const f = fixture();
+    const gate = deferred();
+    const paused = deferred();
+    let attempts = 0;
+    const readback = createPublicVerifier({
+      download: async (_url, _file, expected) => {
+        attempts++;
+        assert.equal(expected.sha256, f.files[2].sha256);
+        if (attempts === 1)
+          throw Object.assign(new Error('FAKE_PRIVATE_RESPONSE'), { code: 'ECONNRESET' });
+      },
+      wait: async () => {
+        paused.resolve();
+        await gate.promise;
+      },
+    });
+    const publishing = publishCosMirror({
+      ...f.options,
+      concurrency: 3,
+      verifyPublic: async (file, url, onRetry) => {
+        if (file.relative === f.files[2].relative) await readback(file, url, onRetry);
+        await f.options.verifyPublic(file, url);
+      },
+    });
+    try {
+      await paused.promise;
+      assert.equal(f.stats().catalogWrites, 0);
+      assert.deepEqual(f.objects.get(catalogKey), f.oldCatalog);
+      assert.equal(f.events.filter((event) => event === 'put:2').length, 1);
+    } finally {
+      gate.resolve();
+    }
+    await publishing;
+    assert.equal(attempts, 2);
+    assert.equal(f.events.filter((event) => event === 'put:2').length, 1);
+    assert.equal(f.stats().catalogWrites, 1);
+    assert(
+      f.progress.some(
+        (event) => event.stage === 'readback-retry' && event.fileIndex === 3 && event.attempt === 2,
+      ),
+    );
+  },
+);
 
 test(
   'COS publication never reads or commits the catalog while the last file readback is pending',

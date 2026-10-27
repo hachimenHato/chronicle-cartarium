@@ -1,10 +1,12 @@
 import path from 'node:path';
-import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, realpath, writeFile } from 'node:fs/promises';
 import { createUpdateDownloader, readUpdateJson } from '../server/update-download';
 import { formatCosDiagnostic } from './lib/cos-diagnostics';
 import { createCosProgressLogger } from './lib/cos-progress';
+import { createPublicVerifier } from './lib/cos-public-verifier';
+
+export { createPublicVerifier } from './lib/cos-public-verifier';
 
 const REPOSITORY = 'https://github.com/hachimenHato/chronicle-cartarium';
 const RELEASE_API = 'https://api.github.com/repos/hachimenHato/chronicle-cartarium/releases/tags/';
@@ -189,31 +191,6 @@ export async function runCosCli(values = process.argv.slice(2)): Promise<void> {
     if (diagnostic) console.error(`诊断代码：${diagnostic}`);
     process.exitCode = 1;
   }
-}
-
-export function createPublicVerifier() {
-  // This is maintainer-side anonymous readback across borders, not the app's
-  // normal update timeout. Slow active transfers may continue; connect/header
-  // and idle guards remain unchanged, as do exact length and SHA verification.
-  const download = createUpdateDownloader({
-    fileLimit: MAX_FILE,
-    timeouts: { totalMs: 3 * 60 * 60 * 1000 },
-  }).downloadUpdateFile;
-  return async (file: { bytes: number; sha256: string }, url: string): Promise<void> => {
-    const temporary = await mkdtemp(path.join(os.tmpdir(), 'chronicle-cos-public-'));
-    try {
-      await download(
-        url,
-        path.join(temporary, 'download'),
-        { bytes: file.bytes, sha256: file.sha256 },
-        () => {},
-      );
-    } finally {
-      // Only this operation's mkdtemp directory is removed, never a CLI path or
-      // installation/data directory supplied by a user.
-      await rm(temporary, { recursive: true, force: true });
-    }
-  };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))

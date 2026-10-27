@@ -296,7 +296,11 @@ export async function publishCosMirror({
   directory: string;
   config: CosConfig;
   store: CosStore;
-  verifyPublic: (file: MirrorFile, url: string) => Promise<void>;
+  verifyPublic: (
+    file: MirrorFile,
+    url: string,
+    onRetry?: (attempt: number) => void,
+  ) => Promise<void>;
   dependencies?: { plan?: typeof planCosMirror };
   onProgress?: (progress: CosProgressEvent) => void;
   concurrency?: number;
@@ -368,7 +372,13 @@ export async function publishCosMirror({
       });
     // Anonymous HTTPS readback verifies exact bytes, readability, DNS safety and SHA before advertising.
     onProgress?.({ stage: 'file-readback', ...counts });
-    await verifyPublic(file, config.publicBaseUrl + '/' + file.relative);
+    await verifyPublic(
+      file,
+      config.publicBaseUrl + '/' + file.relative,
+      onProgress
+        ? (attempt) => onProgress({ stage: 'readback-retry', ...counts, attempt })
+        : undefined,
+    );
     onProgress?.({ stage: 'file-verified', ...counts });
   }
   let nextFile = 0;
@@ -432,6 +442,7 @@ export async function publishCosMirror({
       md5: createHash('md5').update(body).digest('base64'),
     },
     config.publicBaseUrl + '/releases.json',
+    onProgress ? (attempt) => onProgress({ stage: 'readback-retry', attempt }) : undefined,
   );
   onProgress?.({ stage: 'done', fileCount: plan.files.length });
   return {

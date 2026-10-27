@@ -9,6 +9,7 @@ export type CosProgressStage =
   | 'multipart-abort-unconfirmed'
   | 'file-failed'
   | 'file-readback'
+  | 'readback-retry'
   | 'file-verified'
   | 'commit-catalog'
   | 'done';
@@ -39,6 +40,7 @@ const labels: Record<CosProgressStage, string> = {
   'multipart-abort-unconfirmed': '当前分块会话的清理结果尚未确认，已保留固定失败诊断。',
   'file-failed': '更新文件处理失败，停止领取新文件并等待在途任务结束。',
   'file-readback': '正在匿名下载校验更新文件。',
+  'readback-retry': '公开下载校验传输中断，正在重试完整下载校验。',
   'file-verified': '更新文件已通过公开下载校验。',
   'commit-catalog': '正在发布更新清单。',
   done: '更新镜像发布完成。',
@@ -115,6 +117,11 @@ export function createCosProgressLogger(
         write(`开始处理${position}${bytes === undefined ? '' : `（${size(bytes)}）`}。`);
       } else if (stage === 'file-readback') {
         write(`正在匿名下载校验${position}。`);
+      } else if (stage === 'readback-retry') {
+        if (attempt === undefined) return;
+        write(
+          `${validPosition ? position : '更新清单'}的公开下载校验传输中断；开始第 ${attempt}/3 次完整下载校验，已上传对象保留。`,
+        );
       } else if (stage === 'file-verified') {
         write(`${position}已通过公开下载校验。`);
       } else if (stage === 'upload-retry') {

@@ -8,6 +8,19 @@ import {
 
 const MIB = 1024 ** 2;
 
+test('public readback retries identify files and the catalog without exposing arbitrary values', () => {
+  const lines: string[] = [];
+  const log = createCosProgressLogger((line) => lines.push(line));
+  log({ stage: 'readback-retry', fileIndex: 3, fileCount: 7, attempt: 2 });
+  log({ stage: 'readback-retry', attempt: 3 });
+  for (const attempt of [0, 1, 4, NaN, 'FAKE_READBACK_SECRET'])
+    log({ stage: 'readback-retry', attempt } as CosProgressEvent);
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /第 3\/7.*第 2\/3.*已上传对象保留/);
+  assert.match(lines[1], /更新清单.*第 3\/3/);
+  assert.doesNotMatch(lines.join('\n'), /FAKE_READBACK_SECRET/);
+});
+
 function fixture() {
   const lines: string[] = [];
   let time = 0;
