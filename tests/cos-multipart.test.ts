@@ -19,6 +19,10 @@ import { CosPublishError, formatCosDiagnostic } from '../scripts/lib/cos-diagnos
 import { createCosProgressLogger } from '../scripts/lib/cos-progress';
 
 const body = Buffer.alloc(COS_MULTIPART_THRESHOLD + 997, 73);
+const partNumbers = Array.from(
+  { length: Math.ceil(body.length / COS_MULTIPART_PART_BYTES) },
+  (_, index) => index + 1,
+);
 const sha256 = createHash('sha256').update(body).digest('hex');
 const md5 = createHash('md5').update(body).digest('base64');
 const relative = 'v0.2.0-beta.20/chronicle-cartarium-0.2.0-beta.20-win-x64.ccupdate';
@@ -160,18 +164,20 @@ test('large official file uploads use bounded sequential parts and guarded low-l
   });
   assert.deepEqual(
     f.uploads.map((p) => p.number),
-    [1, 2, 3],
+    partNumbers,
   );
   assert.deepEqual(
     f.uploads.map((p) => p.bytes.length),
-    [COS_MULTIPART_PART_BYTES, COS_MULTIPART_PART_BYTES, 997],
+    partNumbers.map((number) =>
+      Math.min(COS_MULTIPART_PART_BYTES, body.length - (number - 1) * COS_MULTIPART_PART_BYTES),
+    ),
   );
-  assert.equal(new Set(f.uploads.map((p) => p.stream)).size, 3);
+  assert.equal(new Set(f.uploads.map((p) => p.stream)).size, partNumbers.length);
   assert(f.uploads.every((p) => p.stream.destroyed));
   assert.deepEqual(f.complete[0].Headers, { 'x-cos-forbid-overwrite': 'true' });
   assert.deepEqual(
     (f.complete[0].Parts as any[]).map((p) => p.PartNumber),
-    [1, 2, 3],
+    partNumbers,
   );
   assert.deepEqual(f.remote(), body);
   assert.equal(f.progress.at(-1), body.length);
@@ -195,13 +201,13 @@ test('a transient failed part retries only that part, using fresh identical stre
   await f.store.put(f.input);
   assert.deepEqual(
     f.uploads.map((p) => p.number),
-    [1, 2, 2, 3],
+    [1, 2, ...partNumbers.slice(1)],
   );
   assert.deepEqual(f.uploads[1].bytes, f.uploads[2].bytes);
   assert.notEqual(f.uploads[1].stream, f.uploads[2].stream);
   assert(f.uploads.every((p) => p.stream.destroyed));
   assert.deepEqual(f.pauses, [3000]);
-  assert.deepEqual(f.retries, [[2, 2, 3]]);
+  assert.deepEqual(f.retries, [[2, 2, partNumbers.length]]);
   assert.deepEqual(f.remote(), body);
 });
 
@@ -256,15 +262,26 @@ test('multipart permission errors are explicit, permanent and never fall back to
   }
 });
 
-test('arbitrary HTTP400 and bad part ETags fail without retries or completion', async (t) => {
-  for (const kind of ['unknown400', 'badDigest', 'etag'] as const) {
+test('explicit provider HTTP400 and bad part ETags fail without retries or completion', async (t) => {
+  for (const kind of [
+    'unknownProvider',
+    'badDigest',
+    'nestedUnknown',
+    'nestedDigest',
+    'etag',
+  ] as const) {
     const f = await fixture(t);
     let count = 0;
     f.client.multipartUpload = async (params) => {
       count++;
       (params.Body as any).destroy();
       if (kind === 'etag') return { ETag: '"not-a-valid-etag' };
-      throw sdkError(400, kind === 'unknown400' ? '400' : 'BadDigest');
+      if (kind === 'nestedUnknown' || kind === 'nestedDigest')
+        throw {
+          ...sdkError(400, '400'),
+          error: { Code: kind === 'nestedDigest' ? 'BadDigest' : 'UNRECOGNIZED_PROVIDER_CODE' },
+        };
+      throw sdkError(400, kind === 'unknownProvider' ? 'UNRECOGNIZED_PROVIDER_CODE' : 'BadDigest');
     };
     await assert.rejects(f.store.put(f.input), CosPublishError);
     assert.equal(count, 1);
@@ -272,6 +289,74 @@ test('arbitrary HTTP400 and bad part ETags fail without retries or completion', 
     assert.equal(f.abort.length, 1);
     assert.equal(f.puts.length, 0);
     assert.deepEqual(f.pauses, []);
+  }
+});
+
+test('a bare HTTP400 replays only identical bytes in the owned part, then completes with full hash', async (t) => {
+  for (const nested of [false, true]) {
+    const f = await fixture(t);
+    const original = f.client.multipartUpload!;
+    let failed = false;
+    f.client.multipartUpload = async (params) => {
+      const result = await original(params);
+      if (params.PartNumber === 2 && !failed) {
+        failed = true;
+        if (nested) throw { statusCode: 400 };
+        throw sdkError(400, '400');
+      }
+      return result;
+    };
+    await f.store.put(f.input);
+    assert.deepEqual(
+      f.uploads.map((p) => p.number),
+      [1, 2, ...partNumbers.slice(1)],
+    );
+    assert.deepEqual(f.uploads[1].bytes, f.uploads[2].bytes);
+    assert.notEqual(f.uploads[1].stream, f.uploads[2].stream);
+    assert.deepEqual(f.pauses, [3000]);
+    assert.equal(f.init.length, 1);
+    assert.equal(f.complete.length, 1);
+    assert.equal(f.abort.length, 0);
+    assert.deepEqual(f.remote(), body);
+  }
+});
+
+test('persistent bare HTTP400 is bounded to three part attempts and never publishes an object', async (t) => {
+  const f = await fixture(t);
+  const original = f.client.multipartUpload!;
+  f.client.multipartUpload = async (params) => {
+    await original(params);
+    throw sdkError(400, '400');
+  };
+  await assert.rejects(f.store.put(f.input), (error) => {
+    assert.equal(formatCosDiagnostic(error), 'COS_MULTIPART_PART / HTTP_400');
+    assert.doesNotMatch(`${JSON.stringify(error)} ${(error as Error).stack}`, /FAKE_MULTIPART/);
+    return true;
+  });
+  assert.deepEqual(
+    f.uploads.map((p) => p.number),
+    [1, 1, 1],
+  );
+  assert.deepEqual(f.pauses, [3000, 6000]);
+  assert.equal(f.complete.length, 0);
+  assert.equal(f.abort.length, 1);
+  assert.equal(f.puts.length, 0);
+  assert.equal(f.remote(), undefined);
+});
+
+test('bare HTTP400 is never replayed for initialization or completion', async (t) => {
+  for (const stage of ['multipartInit', 'multipartComplete'] as const) {
+    const f = await fixture(t);
+    let count = 0;
+    f.client[stage] = async () => {
+      count++;
+      throw sdkError(400, '400');
+    };
+    await assert.rejects(f.store.put(f.input), CosPublishError);
+    assert.equal(count, 1);
+    assert.deepEqual(f.pauses, []);
+    assert.equal(f.remote(), undefined);
+    assert.equal(f.puts.length, 0);
   }
 });
 

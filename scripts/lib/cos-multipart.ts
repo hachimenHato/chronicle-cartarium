@@ -5,7 +5,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { CosPublishError } from './cos-diagnostics';
 
 export const COS_MULTIPART_THRESHOLD = 8 * 1024 ** 2;
-export const COS_MULTIPART_PART_BYTES = 4 * 1024 ** 2;
+// Keep requests short on slow cross-border links; COS permits 1 MiB parts.
+export const COS_MULTIPART_PART_BYTES = 1024 ** 2;
 
 export interface CosMultipartClient {
   multipartInit(params: Record<string, unknown>): Promise<any>;
@@ -37,6 +38,18 @@ function failure(stage: string, error: unknown): CosPublishError {
 function noSuchUpload(error: unknown): boolean {
   const value = error as { statusCode?: unknown; code?: unknown; error?: { Code?: unknown } };
   return value?.statusCode === 404 && (value.error?.Code ?? value.code) === 'NoSuchUpload';
+}
+
+function retryablePart(error: unknown, retryable: (error: unknown) => boolean): boolean {
+  if (retryable(error)) return true;
+  if (!error || typeof error !== 'object' || error instanceof CosPublishError) return false;
+  const value = error as { statusCode?: unknown; code?: unknown; error?: { Code?: unknown } };
+  const code = value.error?.Code ?? value.code;
+  // The fixed SDK uses literal "400" when no COS Error/Code was returned.
+  // Replaying identical bytes under our own UploadId + PartNumber is safe even
+  // after a lost reply. Never extend this exception to Init, Complete, a whole
+  // object PUT or a catalog write, or swallow an explicit provider error.
+  return value.statusCode === 400 && (code === undefined || code === '400');
 }
 
 /**
@@ -182,7 +195,8 @@ export async function uploadCosMultipart({
           break;
         } catch (error) {
           stream.destroy();
-          if (!retryable(error) || attempt === 3) throw failure('COS_MULTIPART_PART', error);
+          if (!retryablePart(error, retryable) || attempt === 3)
+            throw failure('COS_MULTIPART_PART', error);
           await wait(attempt * 3000);
           input.onPartRetry?.(attempt + 1, partNumber, partCount);
         } finally {
